@@ -151,6 +151,7 @@ async def _reply_webapp(client: Client, message: Message, source: str) -> None:
 # ── EARLY PROBE ─────────────────────────────────────────────────────────────
 # This catches the commands even if a normal command filter is being weird
 # or another plugin is swallowing /commands later.
+"""
 @Client.on_message(
     filters.private & filters.incoming & filters.text & filters.regex(r"^/(wtry|webapp)(?:\s|$)"),
     group=-999,
@@ -167,7 +168,7 @@ async def webapp_command_probe(client: Client, message: Message) -> None:
         await _reply_webapp(client, message, "probe")
         return
 
-
+"""
 # ── COMMAND: /wtry ───────────────────────────────────────────────────────────
 @Client.on_message(filters.command("wtry") & filters.private)
 async def wtry_cmd(client: Client, message: Message) -> None:
