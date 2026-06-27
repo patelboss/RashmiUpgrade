@@ -1,5 +1,5 @@
-FROM python:3.10-slim-bookworm
-
+#FROM python:3.10-slim-bookworm
+FROM python:3.11.9-slim-bookworm
 # 1. Install system dependencies & build tools for TgCrypto
 RUN apt-get update && apt-get upgrade -y && \
     apt-get install -y git build-essential python3-dev && \
