@@ -6,7 +6,7 @@ Endpoints:
   GET /api/search?q=<query>&offset=<n>&max=<n>&type=<video|audio|document>
   GET /api/recent?max=<n>
   GET /api/stats
-  POST /api/send_file  <-- 🎯 Reuses native plugins.pm_filter cb_handler cleanly!
+  POST /api/send_file  <-- 🎯 Route proxy passing mock structures into native components
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ import ujson
 from urllib.parse import parse_qsl
 from aiohttp import web
 from plugins.subs_cmd import get_channel_subscriber_count
-
+from info import AUTH_CHANNEL
 from database.ia_filterdb import Media, get_search_results
 from database.users_chats_db import db as users_db
 from utils import get_size
@@ -106,7 +106,7 @@ async def api_recent(request: web.Request) -> web.Response:
         return web.json_response({"error": "Failed to load recent files"}, status=500)
 
 
-async def _fetch_and_cache_stats() -> None:
+async def _fetch_and_cache_stats(bot_client) -> None:
     """Fetch fresh data from DB and store it in RAM until midnight."""
     global _STATS_CACHE, _CACHE_EXPIRE_TIME
 
@@ -114,11 +114,10 @@ async def _fetch_and_cache_stats() -> None:
     total_users = await users_db.total_users_count()
     total_chats = await users_db.total_chat_count()
 
-    subscriber_count = 6000
+    # Pass the resolved client context explicitly down to the sub count component
+    subscriber_count = await get_channel_subscriber_count(bot_client, AUTH_CHANNEL)
+    logger.info("AUTH_CHANNEL=%s | subscriber_count=%s", AUTH_CHANNEL, subscriber_count)
     latest_promo_text = "Comming Soon 🔜"
-    logger.info(
-        "WebApp stats running in DB-only mode; live channel metrics are disabled in this build."
-    )
 
     try:
         size = await users_db.get_db_size()
@@ -163,6 +162,10 @@ async def api_stats(request: web.Request) -> web.Response:
     force_refresh = request.rel_url.query.get("refresh", "").lower() == "true"
     now = datetime.datetime.now()
 
+    bot_client = request.app.get("bot_client")
+    if not bot_client:
+        return web.json_response({"error": "Core framework offline"}, status=503)
+
     try:
         async with _STATS_LOCK:
             if force_refresh or not _STATS_CACHE or not _CACHE_EXPIRE_TIME or now >= _CACHE_EXPIRE_TIME:
@@ -172,7 +175,7 @@ async def api_stats(request: web.Request) -> web.Response:
                     bool(_STATS_CACHE),
                     bool(_CACHE_EXPIRE_TIME and now >= _CACHE_EXPIRE_TIME),
                 )
-                await _fetch_and_cache_stats()
+                await _fetch_and_cache_stats(bot_client)
 
         return web.json_response(_STATS_CACHE)
 
@@ -185,11 +188,13 @@ async def api_stats(request: web.Request) -> web.Response:
         return web.json_response({"error": "Stats unavailable"}, status=500)
 
 
-# ── 🚀 FORWARDER PROXY ROUTE: REUSES PM_FILTER NATIVELY ───────────────────────
+# ── 🚀 SEAMLESS PROXY ROUTE USING REAL TARGET PARAMETERS ─────────────────────
 @api_routes.post("/api/send_file")
 async def api_send_file(request: web.Request) -> web.Response:
     try:
-        # ✅ FIX: Lazy runtime import inside function scope to block circular import errors
+        from pyrogram.enums import ChatType
+        
+        # ✅ FIX 1: Lazy import inside runtime block prevents startup circular imports
         from plugins.pm_filter import cb_handler
 
         payload = await request.json()
@@ -197,29 +202,27 @@ async def api_send_file(request: web.Request) -> web.Response:
         user_id = payload.get("user_id")
         init_data = payload.get("init_data")
         
-        # Check if frontend wants a protected file ("filep") instead of a standard one ("file")
+        # Pull privacy filter tracking parameters directly from frontend layout
         is_protected = bool(payload.get("protect", False))
-        prefix = "filep" if is_protected else "file"
 
         if not user_id:
             user_id = _verify_and_extract_user(init_data)
 
         if not user_id:
-            logger.warning("Forwarder proxy bypassed: Missing user ID entry context.")
+            logger.warning("WebApp Pipeline Forwarder bypassed: Missing a target User ID entry.")
             return web.json_response({"status": "redirect_required"}, status=200)
 
         user_id = int(user_id)
 
         bot_client = request.app.get("bot_client")
         if not bot_client:
-            logger.error("Aiohttp global memory map storage is missing the active running 'bot_client' reference context.")
+            logger.error("Aiohttp global store is missing the active running 'bot_client' reference context.")
             return web.json_response({"status": "redirect_required"}, status=200)
 
-        # ── 🛠️ CONSTRUCT MOCK OBJECT LAYOUTS MATCHING EXPECTED ATTRIBUTES ──
-        # ✅ FIX: Hardcoded dummy chat ID configured to fetch real group DB configurations
+        # ── 🛠️ BUILD ENVIRONMENT MOCKS ────────────────────────────────────────
+        # ✅ FIX 2: Explicitly pass your static group chat ID context parameter
         DUMMY_CHAT_ID = -1001860020592
-        
-        mock_chat = type("MockChat", (object,), {"id": DUMMY_CHAT_ID})()
+        mock_chat = type("MockChat", (object,), {"id": DUMMY_CHAT_ID, "type": ChatType.SUPERGROUP})()
         
         async def mock_reply_func(*args, **kwargs):
             return await bot_client.send_message(chat_id=user_id, text=args)
@@ -230,21 +233,17 @@ async def api_send_file(request: web.Request) -> web.Response:
             {
                 "id": 1,
                 "chat": mock_chat,
-                "delete": lambda *args, **kwargs: asyncio.sleep(0),
+                "delete": lambda *args, **kwargs: asyncio.sleep(0), 
                 "reply": mock_reply_func
             }
         )()
 
         mock_user = type("MockUser", (object,), {"id": user_id, "first_name": "User"})()
 
-        async def dummy_answer_func(*args, **kwargs):
-            # If the native cb_handler replies with a deep link URL answer, catch it here
-            url_target = kwargs.get("url") or (args if args else None)
-            if url_target and "start=" in str(url_target):
-                logger.warning("Native cb_handler flagged a deep link redirection parameter fallback rule.")
-            return True
+        # ✅ FIX 3: Map data prefix based on structural privacy requirements
+        prefix = "filep" if is_protected else "file"
 
-        # Build a functional CallbackQuery skeleton bound to your target file tokens
+        # Build complete custom CallbackQuery template instance matching native variables
         mock_query = type(
             "MockCallbackQuery",
             (object,),
@@ -253,18 +252,18 @@ async def api_send_file(request: web.Request) -> web.Response:
                 "client": bot_client,
                 "from_user": mock_user,
                 "message": mock_msg,
-                "data": f"{prefix}#{raw_file_id}",  # Dynamically routes file# vs filep# based on your requirements
-                "answer": dummy_answer_func,       # Non-blocking async no-op stub
+                "data": f"{prefix}#{raw_file_id}", # Reuses your precise file vs filep split syntax
+                "answer": lambda *args, **kwargs: asyncio.sleep(0), 
                 "edit_message_reply_markup": lambda *args, **kwargs: asyncio.sleep(0)
             }
         )()
 
-        # ── ⚡ INJECT INTO NATIVE HANDLER LOOP ──
-        logger.info("Forwarding mock WebApp event payload straight to plugins.pm_filter.cb_handler -> User: %s", user_id)
+        # ── ⚡ INJECT INTO NATIVE FILTER SYSTEM ──
+        logger.info("Forwarding mock WebApp event payload straight to pm_filter.cb_handler -> User: %s | Data: %s", user_id, mock_query.data)
         await cb_handler(bot_client, mock_query)
 
         return web.json_response({"status": "direct_sent"}, status=200)
 
     except Exception as global_exc:
-        logger.exception("Global pipeline error inside forwarding proxy endpoint handler: %s", global_exc)
+        logger.exception("Global pipeline exception caught inside forwarding proxy route layout: %s", global_exc)
         return web.json_response({"status": "redirect_required"}, status=200)
