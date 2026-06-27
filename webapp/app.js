@@ -419,3 +419,48 @@ if (initData?.start_param) {
     setTimeout(() => doSearch(), 300);
   }
 }
+
+
+// ── Theme Switching Logic Engine ──────────────────────────────────────────
+const themeToggleBtn = document.getElementById('themeToggleBtn');
+
+function initTheme() {
+  // 1. Check if user has explicitly saved a theme layout preference
+  const savedTheme = localStorage.getItem('user-theme');
+  
+  if (savedTheme) {
+    if (savedTheme === 'light') {
+      document.body.classList.add('light-theme');
+    }
+  } else {
+    // 2. Fallback strategy: Sync automatically with Telegram user skin or system configuration
+    if (tg && tg.colorScheme) {
+      if (tg.colorScheme === 'light') {
+        document.body.classList.add('light-theme');
+      }
+    } else {
+      // Direct Web layout matching check
+      const systemPrefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
+      if (systemPrefersLight) {
+        document.body.classList.add('light-theme');
+      }
+    }
+  }
+}
+
+// Attach interactive execution handler
+if (themeToggleBtn) {
+  themeToggleBtn.addEventListener('click', () => {
+    document.body.classList.toggle('light-theme');
+    
+    // Save state to preserve selection across subsequent app launches
+    if (document.body.classList.contains('light-theme')) {
+      localStorage.setItem('user-theme', 'light');
+    } else {
+      localStorage.setItem('user-theme', 'dark');
+    }
+  });
+}
+
+// Fire runtime validation check
+initTheme();
