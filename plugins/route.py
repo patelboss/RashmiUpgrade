@@ -1,6 +1,6 @@
 """
 route.py – aiohttp web routes.
-IMPROVED: Flat layout routing logic with enhanced diagnostics.
+IMPROVED: Flat layout routing logic with explicit FileResponse parameters and diagnostics.
 """
 import json
 import time
@@ -49,7 +49,7 @@ async def webapp_handler(request: web.Request) -> web.Response:
         return web.Response(text="<h2>Web App Markup Document Not Found</h2>", content_type="text/html", status=404)
 
 
-# FIX: Handle app.css and app.js when requested from root or inside subpaths
+# FIX: Explicitly define path= for aiohttp's FileResponse handler
 @routes.get("/{filename:app\.css|app\.js}")
 @routes.get("/webapp/{filename:app\.css|app\.js}")
 async def webapp_flat_assets_handler(request: web.Request) -> web.FileResponse:
@@ -60,12 +60,13 @@ async def webapp_flat_assets_handler(request: web.Request) -> web.FileResponse:
     logger.info("Asset routing lookup intercept: Client requested file -> %s", full_path)
     
     if os.path.exists(full_path) and os.path.isfile(full_path):
-        return web.FileResponse(full_path)
+        return web.FileResponse(path=full_path)  # Added explicit path= keyword
         
     logger.warning("Requested flat file asset lookup failed verification boundaries: %s", full_path)
     raise web.HTTPNotFound()
 
 
+# FIX: Explicitly define path= here as well
 @routes.get("/webapp/{path:.+}")
 async def webapp_legacy_static_handler(request: web.Request) -> web.FileResponse:
     """Fallback directory route handler mapping deep nested folders."""
@@ -73,7 +74,7 @@ async def webapp_legacy_static_handler(request: web.Request) -> web.FileResponse
     full_path = f"webapp/{path}"
     
     if os.path.exists(full_path) and os.path.isfile(full_path):
-        return web.FileResponse(full_path)
+        return web.FileResponse(path=full_path)  # Added explicit path= keyword
     raise web.HTTPNotFound()
 
 
