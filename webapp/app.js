@@ -337,7 +337,7 @@ function escHtml(s) {
     .replace(/"/g, '&quot;');
 }
 
-// ── ✅ UPDATED: Premium Direct Bypass Delivery Method ────────────────────────
+// ── ✅ UPDATED: Native Direct Background Dispatch with showPopup ───────────
 async function getFile() {
   const file = state.currentFile;
   if (!file) return;
@@ -345,47 +345,44 @@ async function getFile() {
   const targetId = file._id || file.file_id;
   console.log(`Action requested: Fetch file execution for record payload reference token: ${targetId}`);
 
-  // Visual text loading state shift on button layer
   const actionBtn = document.querySelector('.btn-primary');
   const originalText = actionBtn ? actionBtn.innerHTML : '📥 Get File';
   if (actionBtn) actionBtn.innerHTML = '🔄 Processing...';
 
   try {
-    // 1. Attempt premium background delivery straight over HTTP POST
     const response = await fetch(`${BASE_URL}/api/send_file`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         file_id: targetId,
-        init_data: tg?.initData || "" // Sends authorization payload strings to extract User IDs
+        init_data: tg?.initData || "" 
       })
     });
 
     const resData = await response.json();
 
     if (response.ok && resData.status === 'direct_sent') {
-      // Direct message succeeded! Inform user cleanly inside WebApp interface context
-      if (tg?.showPopup) {
+      // ✅ TRIGGER THE NATIVE POPUP DIALOG
+      if (tg && tg.showPopup) {
         tg.showPopup({
-          title: 'File Sent Successfully! 📥',
-          message: 'The requested media file has been sent directly to your private messages inbox room.',
-          buttons: [{ type: 'ok' }]
+          title: "File Dispatched! 🚀",
+          message: "𝐂𝐡𝐞𝐜𝐤 𝐘𝐨𝐮𝐫 𝐏𝐫𝐢𝐯𝐚𝐭𝐞 𝐦𝐞𝐬𝐬𝐚𝐠𝐞, 𝐈 𝐡𝐚𝐯𝐞 𝐬𝐞𝐧𝐭 𝐟𝐢𝐥𝐞𝐬 𝐢𝐧 𝐩𝐦.\n\nMinimize or close this window to access your media on @Rashmika_mandanana_bot.",
+          buttons: [{ id: "ok", type: "default", text: "OK, Got It!" }]
         });
       } else {
-        showFeedback('🚀 File sent straight to your private chat!');
+        alert("𝐂𝐡𝐞𝐜𝐤 𝐘𝐨𝐮𝐫 𝐏𝐫𝐢𝐯𝐚𝐭𝐞 𝐦𝐞𝐬𝐬𝐚𝐠𝐞, 𝐈 𝐡𝐚𝐯𝐞 𝐬𝐞𝐧𝐭 𝐟𝐢𝐥𝐞𝐬 𝐢𝐧 𝐩𝐦.\n\nMinimize or close this window to access your media on @Rashmika_mandanana_bot.");
       }
       closeSheet();
       return;
     }
     
-    // 2. Fallback to deep link redirection window if user has not interacted with the bot yet
+    // Fallback to deep link redirection
     if (tg) {
       const botUsername = "Rashmi_v2_bot"; 
       const deepLinkUrl = `https://t.me/${botUsername}?start=get_${targetId}`;
       tg.openTelegramLink(deepLinkUrl);
       tg.close();
     } else {
-      console.warn("SDK platform bridge absent. Processing local clipboard fallback loop strategy.");
       navigator.clipboard?.writeText(`get_${targetId}`)
         .then(() => showFeedback('Query token copied!'))
         .catch(() => showFeedback('Clipboard integration fallback failure'));
