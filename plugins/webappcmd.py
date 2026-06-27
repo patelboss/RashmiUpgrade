@@ -5,6 +5,9 @@ Also handles inline deep-linking queries when data is passed from the Web App in
 import logging
 import json
 import os
+import os
+from pyrogram import Client, filters, enums
+from pyrogram.errors.exceptions.bad_request_400 import UserNotParticipant, MediaEmpty, PhotoInvalidDimensions, WebpageMediaEmpty
 
 from pyrogram import Client, filters, enums
 from pyrogram.types import (
