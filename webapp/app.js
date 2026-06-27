@@ -315,13 +315,15 @@ function getFile() {
   const targetId = file._id || file.file_id;
   console.log(`Action requested: Fetch file execution for record payload reference token: ${targetId}`);
 
-  // UPDATED: Replaced switchInlineQuery with sendData to send message straight to the chat and exit instantly!
-  if (tg && tg.sendData) {
-    console.log("Passing raw extraction token directly into Telegram chat via sendData layer.");
-    tg.sendData(`get_${targetId}`);
+  if (tg) {
+    // This builds a deep-linked start URL that auto-triggers your /start handler with the payload
+    const botUsername = "Rashmi_v2_bot"; // Make sure this matches your bot's exact username
+    const deepLinkUrl = `https://t.me/${botUsername}?start=get_${targetId}`;
+    
+    tg.openTelegramLink(deepLinkUrl);
     tg.close();
   } else {
-    console.warn("SDK sendData interface absent. Processing local clipboard fallback loop strategy.");
+    console.warn("SDK platform bridge absent. Processing local clipboard fallback loop strategy.");
     navigator.clipboard?.writeText(`get_${targetId}`)
       .then(() => showFeedback('Query text copied!'))
       .catch(() => showFeedback('Clipboard integration fallback failure'));
