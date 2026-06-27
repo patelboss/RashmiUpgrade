@@ -1,6 +1,5 @@
 """
-webapp_cmd.py – Registers /webapp command that sends the Telegram Web App button.
-Also handles inline deep-linking queries when data is passed from the Web App interface.
+webapp_cmd.py – Handles inline deep-linking queries when data is passed from the Web App interface.
 """
 
 from __future__ import annotations
@@ -34,12 +33,7 @@ logger.info("=" * 72)
 
 try:
     from pyrogram import Client, filters, enums
-    from pyrogram.types import (
-        InlineKeyboardButton,
-        InlineKeyboardMarkup,
-        Message,
-        WebAppInfo,
-    )
+    from pyrogram.types import Message
 
     import variables
     from database.ia_filterdb import get_file_details
@@ -51,25 +45,6 @@ except Exception as import_error:
     print(f"CRITICAL COMPILATION ERROR IN WEBAPP PLUGIN: {import_error}", file=sys.stderr)
     logger.exception("Webapp plugin failed to initialize top-level imports:")
     raise
-
-
-def _webapp_url() -> str:
-    """Build and validate the Web App URL served by this bot."""
-    base = os.environ.get("BASE_URL", "").strip().rstrip("/")
-    logger.info("Resolving WebApp BASE_URL. Raw resolved string: %r", base)
-
-    if not base:
-        return ""
-
-    if not base.startswith(("https://", "http://")):
-        logger.warning("BASE_URL does not look like a valid URL: %r", base)
-        return ""
-
-    # Telegram Web Apps are expected to use HTTPS in production.
-    if base.startswith("http://") and not base.startswith("http://localhost"):
-        logger.warning("BASE_URL is HTTP. Telegram Web Apps usually require HTTPS in production.")
-
-    return f"{base}/webapp"
 
 
 def _field(obj: Any, key: str, default: Any = None) -> Any:
@@ -108,7 +83,6 @@ def _extract_file_id(payload: str) -> str:
             logger.exception("Failed to parse JSON payload from web app data.")
 
     return payload.strip()
-
 
 
 @Client.on_message(filters.private & filters.incoming & filters.text, group=100)
@@ -213,10 +187,6 @@ async def webapp_inline_handler(client: Client, message: Message) -> None:
                 caption = caption or title
                 logger.error("Caption metadata string parsing failed: %s", formatting_err)
 
-        btn = InlineKeyboardMarkup(
-            [[InlineKeyboardButton("Join Offer Zone 🤑", url=ofr_cnl)]]
-        )
-
         logger.info(
             "Sending cached media to user %s using file_id=%s | final_caption=%r",
             user_id,
@@ -230,7 +200,6 @@ async def webapp_inline_handler(client: Client, message: Message) -> None:
                 file_id=cached_file_id,
                 caption=caption or title,
                 protect_content=protect_content,
-                reply_markup=btn,
             )
             logger.info("Cached media delivered successfully to user %s", user_id)
         except Exception as send_err:
