@@ -287,7 +287,7 @@ function openSheet(file) {
         <span class="sheet-row-val" style="font-size:.72rem">${escHtml(file.mime_type)}</span>
       </div>` : ''}
     </div>
-    ${file.caption ? `<div class="sheet-caption">${escHtml(file.caption)}</div>` : ''}
+    ${file.caption ? `<div class="sheet-caption">${escHtml(file.file_name)}</div>` : ''}
     <div class="sheet-actions">
       <button class="btn-primary" onclick="getFile()">📥 Get File</button>
       <button class="btn-secondary" onclick="closeSheet()">Close</button>
