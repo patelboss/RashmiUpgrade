@@ -422,38 +422,50 @@ if (initData?.start_param) {
 
 
 // ── Theme Switching Logic Engine ──────────────────────────────────────────
+
+// ── Automated Dynamic Theme Engine ──────────────────────────────────────────
 const themeToggleBtn = document.getElementById('themeToggleBtn');
 
 function initTheme() {
-  // 1. Check if user has explicitly saved a theme layout preference
+  // 1. First priority: Check if the user manually saved a choice in this browser session
   const savedTheme = localStorage.getItem('user-theme');
   
   if (savedTheme) {
     if (savedTheme === 'light') {
       document.body.classList.add('light-theme');
-    }
-  } else {
-    // 2. Fallback strategy: Sync automatically with Telegram user skin or system configuration
-    if (tg && tg.colorScheme) {
-      if (tg.colorScheme === 'light') {
-        document.body.classList.add('light-theme');
-      }
     } else {
-      // Direct Web layout matching check
-      const systemPrefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
-      if (systemPrefersLight) {
-        document.body.classList.add('light-theme');
-      }
+      document.body.classList.remove('light-theme');
     }
+    return; // Choice exists; stop automatic sensing execution loop
+  }
+
+  // 2. Second priority: Read native Telegram interface environment properties automatically
+  if (tg && tg.colorScheme) {
+    console.log(`Telegram client color scheme detected: ${tg.colorScheme}`);
+    if (tg.colorScheme === 'light') {
+      document.body.classList.add('light-theme');
+    } else {
+      document.body.classList.remove('light-theme');
+    }
+    return;
+  }
+
+  // 3. Third priority: Read mobile/desktop operating system preferences automatically
+  const systemPrefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
+  console.log(`Fallback system environment configuration light mode profile match: ${systemPrefersLight}`);
+  if (systemPrefersLight) {
+    document.body.classList.add('light-theme');
+  } else {
+    document.body.classList.remove('light-theme');
   }
 }
 
-// Attach interactive execution handler
+// ── Manual Toggle Action Override Listener ──
 if (themeToggleBtn) {
   themeToggleBtn.addEventListener('click', () => {
     document.body.classList.toggle('light-theme');
     
-    // Save state to preserve selection across subsequent app launches
+    // Save the explicit user preference to storage so it stops auto-sensing next time
     if (document.body.classList.contains('light-theme')) {
       localStorage.setItem('user-theme', 'light');
     } else {
@@ -462,5 +474,15 @@ if (themeToggleBtn) {
   });
 }
 
-// Fire runtime validation check
+// Automatically bind Telegram's background scheme changes on-the-fly 
+if (tg) {
+  tg.onEvent('themeChanged', () => {
+    // Only auto-shift themes if the user hasn't explicitly set a hard override
+    if (!localStorage.getItem('user-theme')) {
+      initTheme();
+    }
+  });
+}
+
+// Fire automated system verification stack at app launch
 initTheme();
