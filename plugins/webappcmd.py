@@ -112,29 +112,26 @@ def _extract_file_id(payload: str) -> str:
 
 @Client.on_message(filters.command("wtry") & filters.private)
 async def wtry_cmd(client: Client, message: Message) -> None:
-    """Diagnostic command to verify whether WebApp URL and plugin bootstrapping work."""
+    """
+    Tiny diagnostic command.
+    If this replies, the file is imported and the handler is registered.
+    """
     user_id = message.from_user.id if message.from_user else "Unknown"
     logger.info("Command /wtry triggered by user ID: %s", user_id)
 
-    url = _webapp_url()
-    logger.info("wtry resolved URL: %r", url)
-
-    if not url:
-        await message.reply_text(
-            "<b>Web App URL is not configured.</b>\n"
-            "Set the <code>BASE_URL</code> environment variable to your server URL.",
-            parse_mode=enums.ParseMode.HTML,
-        )
-        return
-
-    markup = InlineKeyboardMarkup(
-        [[InlineKeyboardButton("🔎 Open Media Search", web_app=WebAppInfo(url=url))]]
-    )
-
     await message.reply_text(
-        "<b>✅ Web App configuration looks OK.</b>\n\n"
-        "Tap the button below to open the media search app directly in Telegram.",
-        reply_markup=markup,
+        "✅ wtry reached this file and the handler is alive.",
+        parse_mode=enums.ParseMode.HTML,
+    )
+@Client.on_message(filters.command("wtry2") & filters.private)
+async def wtry2_cmd(client: Client, message: Message) -> None:
+    # 1. Properly resolve the user_id from the incoming message object
+    user_id = message.from_user.id if message.from_user else "Unknown"
+    logger.info("Command /wtry2 triggered by user ID: %s", user_id)
+    
+    # 2. message is now an accessible parameter, allowing the reply to send
+    await message.reply_text(
+        "✅ wtry2 reached this file and the handler is alive.",
         parse_mode=enums.ParseMode.HTML,
     )
 
@@ -145,43 +142,84 @@ async def webapp_cmd(client: Client, message: Message) -> None:
     user_id = message.from_user.id if message.from_user else "Unknown"
     logger.info("Command /webapp triggered by user ID: %s", user_id)
 
-    url = _webapp_url()
-    if not url:
-        logger.warning("Aborting /webapp dispatch: BASE_URL is empty or invalid.")
-        await message.reply_text(
-            "<b>Web App URL is not configured.</b>\n"
-            "Set the <code>BASE_URL</code> environment variable to your server URL.",
-            parse_mode=enums.ParseMode.HTML,
-        )
-        return
+    try:
+        url = _webapp_url()
+        logger.info("Resolved /webapp URL: %r", url)
 
-    markup = InlineKeyboardMarkup(
-        [[InlineKeyboardButton("🔎 Open Media Search", web_app=WebAppInfo(url=url))]]
-    )
+        if not url:
+            logger.warning("Aborting /webapp dispatch: BASE_URL is empty or invalid.")
+            await message.reply_text(
+                "<b>Web App URL is not configured.</b>\n"
+                "Set the <code>BASE_URL</code> environment variable to your server URL.",
+                parse_mode=enums.ParseMode.HTML,
+            )
+            return
 
-    logger.info("Dispatching WebApp button with URL: %s", url)
-    await message.reply_text(
-        "<b>🎬 AutoFile Media Search</b>\n\n"
-        "Tap the button below to open the media search app directly in Telegram.",
-        reply_markup=markup,
-        parse_mode=enums.ParseMode.HTML,
-    )
+        try:
+            markup = InlineKeyboardMarkup(
+                [[InlineKeyboardButton("🔎 Open Media Search", web_app=WebAppInfo(url=url))]]
+            )
+            logger.info("WebApp markup created successfully for user %s", user_id)
+        except Exception as markup_err:
+            logger.exception("Failed to build WebApp markup for user %s.", user_id)
+            await message.reply_text(
+                f"<b>❌ Could not build Web App button:</b>\n<code>{markup_err}</code>",
+                parse_mode=enums.ParseMode.HTML,
+            )
+            return
+
+        try:
+            await message.reply_text(
+                "<b>🎬 AutoFile Media Search</b>\n\n"
+                "Tap the button below to open the media search app directly in Telegram.",
+                reply_markup=markup,
+                parse_mode=enums.ParseMode.HTML,
+            )
+            logger.info("WebApp message sent successfully to user %s", user_id)
+        except Exception as send_err:
+            logger.exception("Failed to send /webapp reply for user %s.", user_id)
+            await message.reply_text(
+                f"<b>❌ Failed to send WebApp message:</b>\n<code>{send_err}</code>",
+                parse_mode=enums.ParseMode.HTML,
+            )
+
+    except Exception as exc:
+        logger.exception("Unexpected failure inside /webapp handler for user %s.", user_id)
+        try:
+            await message.reply_text(
+                f"<b>❌ /webapp crashed:</b>\n<code>{exc}</code>",
+                parse_mode=enums.ParseMode.HTML,
+            )
+        except Exception:
+            logger.exception("Could not send /webapp crash message to user %s.", user_id)
 
 
 @Client.on_message(filters.private & filters.incoming & filters.text, group=100)
 async def webapp_inline_handler(client: Client, message: Message) -> None:
     """
     Handles deep-linked extraction tokens passed back by the interface layout.
+    This handler is intentionally chatty in logs so you can see exactly what is happening.
     """
     text = (message.text or "").strip()
+    user_id = message.from_user.id if message.from_user else None
+
+    logger.info(
+        "Inline handler entered | user_id=%s | chat_id=%s | text=%r",
+        user_id,
+        getattr(message.chat, "id", None),
+        text,
+    )
+
     if not text:
+        logger.info("Inline handler exit: empty text.")
         return
 
     # Keep this handler narrow so it doesn't eat all incoming text.
-    if not (text.startswith("get_") or text.startswith("{") or text):
+    # Only react to payloads starting with get_ or raw JSON payloads.
+    if not (text.startswith("get_") or text.startswith("{")):
+        logger.info("Inline handler exit: text does not match webapp payload pattern.")
         return
 
-    user_id = message.from_user.id if message.from_user else None
     if user_id is None:
         logger.warning("Incoming message without from_user; skipping.")
         return
@@ -197,6 +235,7 @@ async def webapp_inline_handler(client: Client, message: Message) -> None:
     try:
         logger.info("Querying database for file details: %s", file_id)
         files = await get_file_details(file_id)
+        logger.info("get_file_details returned type=%s value=%r", type(files).__name__, files)
 
         if not files:
             logger.warning("Database returned no file for token: %s", file_id)
@@ -211,6 +250,13 @@ async def webapp_inline_handler(client: Client, message: Message) -> None:
         original_caption = _field(f, "caption", "") or ""
         cached_file_id = _field(f, "file_id", "") or ""
 
+        logger.info(
+            "Resolved record | original_name=%r | original_size=%r | cached_file_id=%r",
+            original_name,
+            original_size,
+            cached_file_id,
+        )
+
         if not cached_file_id:
             logger.warning("File record found but file_id is missing for token: %s", file_id)
             await message.reply_text("⚠️ File record is incomplete.")
@@ -224,11 +270,18 @@ async def webapp_inline_handler(client: Client, message: Message) -> None:
             size = ""
 
         caption = original_caption
-        logger.info("Loaded file record. name=%r size=%r", original_name, size)
+        logger.info("Loaded file record. name=%r size=%r caption_present=%s", original_name, size, bool(caption))
 
         custom_caption = getattr(variables, "CUSTOM_FILE_CAPTION", "")
         protect_content = bool(getattr(variables, "PROTECT_CONTENT", False))
         ofr_cnl = getattr(variables, "OFR_CNL", "https://t.me/Filmykeedha")
+
+        logger.info(
+            "Runtime config | CUSTOM_FILE_CAPTION=%s | PROTECT_CONTENT=%s | OFR_CNL=%s",
+            bool(custom_caption),
+            protect_content,
+            ofr_cnl,
+        )
 
         if custom_caption:
             try:
@@ -237,6 +290,7 @@ async def webapp_inline_handler(client: Client, message: Message) -> None:
                     file_size=size or "",
                     file_caption=caption or "",
                 )
+                logger.info("Custom caption formatted successfully.")
             except Exception as formatting_err:
                 logger.exception("Caption formatting failed for file_id=%s", file_id)
                 caption = caption or title
@@ -246,16 +300,32 @@ async def webapp_inline_handler(client: Client, message: Message) -> None:
             [[InlineKeyboardButton("Join Offer Zone 🤑", url=ofr_cnl)]]
         )
 
-        logger.info("Sending cached media to user %s using file_id=%s", user_id, cached_file_id)
-        await client.send_cached_media(
-            chat_id=user_id,
-            file_id=cached_file_id,
-            caption=caption or title,
-            protect_content=protect_content,
-            reply_markup=btn,
+        logger.info(
+            "Sending cached media to user %s using file_id=%s | final_caption=%r",
+            user_id,
+            cached_file_id,
+            caption or title,
         )
-        logger.info("Cached media delivered successfully to user %s", user_id)
+
+        try:
+            await client.send_cached_media(
+                chat_id=user_id,
+                file_id=cached_file_id,
+                caption=caption or title,
+                protect_content=protect_content,
+                reply_markup=btn,
+            )
+            logger.info("Cached media delivered successfully to user %s", user_id)
+        except Exception as send_err:
+            logger.exception("send_cached_media failed for user %s and file_id=%s", user_id, cached_file_id)
+            await message.reply_text(
+                f"⚠️ Could not send the requested file.\n\n<code>{send_err}</code>",
+                parse_mode=enums.ParseMode.HTML,
+            )
 
     except Exception as exc:
         logger.error("Critical failure during file dispatch: %s", exc, exc_info=True)
-        await message.reply_text("⚠️ Could not process or send the requested file record.")
+        await message.reply_text(
+            f"⚠️ Could not process or send the requested file record.\n\n<code>{exc}</code>",
+            parse_mode=enums.ParseMode.HTML,
+        )
