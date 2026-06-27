@@ -6,7 +6,7 @@ Endpoints:
   GET /api/search?q=<query>&offset=<n>&max=<n>&type=<video|audio|document>
   GET /api/recent?max=<n>
   GET /api/stats
-  POST /api/send_file  <-- 🎯 Safely proxies button data straight to pm_filter.py!
+  POST /api/send_file  <-- 🎯 Reuses native plugins.pm_filter cb_handler cleanly!
 """
 
 from __future__ import annotations
@@ -189,15 +189,17 @@ async def api_stats(request: web.Request) -> web.Response:
 @api_routes.post("/api/send_file")
 async def api_send_file(request: web.Request) -> web.Response:
     try:
-        from pyrogram.enums import ChatType
-        
-        # ✅ FIX: Point the lazy import statement directly at your real file!
+        # ✅ FIX: Lazy runtime import inside function scope to block circular import errors
         from plugins.pm_filter import cb_handler
 
         payload = await request.json()
         raw_file_id = payload.get("file_id")
         user_id = payload.get("user_id")
         init_data = payload.get("init_data")
+        
+        # Check if frontend wants a protected file ("filep") instead of a standard one ("file")
+        is_protected = bool(payload.get("protect", False))
+        prefix = "filep" if is_protected else "file"
 
         if not user_id:
             user_id = _verify_and_extract_user(init_data)
@@ -210,12 +212,14 @@ async def api_send_file(request: web.Request) -> web.Response:
 
         bot_client = request.app.get("bot_client")
         if not bot_client:
-            logger.error("Aiohttp context map storage is missing the running 'bot_client' token index.")
+            logger.error("Aiohttp global memory map storage is missing the active running 'bot_client' reference context.")
             return web.json_response({"status": "redirect_required"}, status=200)
 
-        # ── 🛠️ CONSTRUCT MOCK ENVIRONMENT WRAPPERS ───────────────────────────
-        # Build private chat references so settings['botpm'] checks execute without errors
-        mock_chat = type("MockChat", (object,), {"id": user_id, "type": ChatType.PRIVATE})()
+        # ── 🛠️ CONSTRUCT MOCK OBJECT LAYOUTS MATCHING EXPECTED ATTRIBUTES ──
+        # ✅ FIX: Hardcoded dummy chat ID configured to fetch real group DB configurations
+        DUMMY_CHAT_ID = -1001860020592
+        
+        mock_chat = type("MockChat", (object,), {"id": DUMMY_CHAT_ID})()
         
         async def mock_reply_func(*args, **kwargs):
             return await bot_client.send_message(chat_id=user_id, text=args)
@@ -233,7 +237,14 @@ async def api_send_file(request: web.Request) -> web.Response:
 
         mock_user = type("MockUser", (object,), {"id": user_id, "first_name": "User"})()
 
-        # Build simulated CallbackQuery skeleton object parameters
+        async def dummy_answer_func(*args, **kwargs):
+            # If the native cb_handler replies with a deep link URL answer, catch it here
+            url_target = kwargs.get("url") or (args if args else None)
+            if url_target and "start=" in str(url_target):
+                logger.warning("Native cb_handler flagged a deep link redirection parameter fallback rule.")
+            return True
+
+        # Build a functional CallbackQuery skeleton bound to your target file tokens
         mock_query = type(
             "MockCallbackQuery",
             (object,),
@@ -242,13 +253,13 @@ async def api_send_file(request: web.Request) -> web.Response:
                 "client": bot_client,
                 "from_user": mock_user,
                 "message": mock_msg,
-                "data": f"file#{raw_file_id}", # Reuses your query.data.startswith("file") format
-                "answer": lambda *args, **kwargs: asyncio.sleep(0), # Mutes popup answer errors from crashing the route
+                "data": f"{prefix}#{raw_file_id}",  # Dynamically routes file# vs filep# based on your requirements
+                "answer": dummy_answer_func,       # Non-blocking async no-op stub
                 "edit_message_reply_markup": lambda *args, **kwargs: asyncio.sleep(0)
             }
         )()
 
-        # ── ⚡ PROXY DISPATCH STRAIGHT TO YOUR REAL LOGIC ──
+        # ── ⚡ INJECT INTO NATIVE HANDLER LOOP ──
         logger.info("Forwarding mock WebApp event payload straight to plugins.pm_filter.cb_handler -> User: %s", user_id)
         await cb_handler(bot_client, mock_query)
 
