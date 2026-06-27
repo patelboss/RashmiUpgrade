@@ -195,30 +195,42 @@ async def api_send_file(request: web.Request) -> web.Response:
 
         data = await request.json()
         raw_file_id = data.get("file_id")
+        
+        # Pull the direct user_id sent from the front-end layer
+        user_id = data.get("user_id")
         init_data = data.get("init_data")
 
-        # 1. Parse and extract User ID from WebApp initData query string context
-        user_id = _verify_and_extract_user(init_data)
         if not user_id:
-            return web.json_response({"error": "Unauthorized user validation failed"}, status=401)
+            user_id = _verify_and_extract_user(init_data)
 
-        # 2. Grab your shared live bot client reference from aiohttp application context
+        if not user_id:
+            logger.warning("File delivery aborted: No valid user identifier parsed.")
+            return web.json_response({"status": "redirect_required"}, status=200)
+
+        # Force structural format matching for Pyrogram chat_id target integers
+        user_id = int(user_id)
+
         bot_client = request.app.get("bot_client")
         if not bot_client:
-            return web.json_response({"error": "Core framework pipeline offline"}, status=500)
+            logger.error("Aiohttp request app configuration context is missing 'bot_client'.")
+            return web.json_response({"status": "redirect_required"}, status=200)
 
-        # 3. Pull documents metrics from DB matching target hash indices
+        # Retrieve direct details from the DB matching raw identifier string hashes
         files = await get_file_details(raw_file_id)
         if not files:
-            return web.json_response({"error": "File entry absent from DB"}, status=404)
+            return web.json_response({"error": "File entry absent from DB indices"}, status=404)
 
         f = files if isinstance(files, (list, tuple)) else files
-        cached_file_id = getattr(f, "file_id", "") or f.get("file_id", "")
-        original_name = getattr(f, "file_name", "") or f.get("file_name", "")
-        original_size = getattr(f, "file_size", 0) or f.get("file_size", 0)
-        original_caption = getattr(f, "caption", "") or f.get("caption", "")
+        
+        # Access properties using fallback get dictionaries matching dictionary shapes
+        cached_file_id = f.get("file_id") if isinstance(f, dict) else getattr(f, "file_id", "")
+        original_name = f.get("file_name") if isinstance(f, dict) else getattr(f, "file_name", "")
+        original_size = f.get("file_size") if isinstance(f, dict) else getattr(f, "file_size", 0)
+        original_caption = f.get("caption") if isinstance(f, dict) else getattr(f, "caption", "")
 
-        # 4. Process layout caption rules strings matching global variable states
+        if not cached_file_id:
+            return web.json_response({"error": "Document media hash payload missing"}, status=400)
+
         title = clean_file_name(str(original_name or raw_file_id))
         try:
             size = get_size(int(original_size))
@@ -239,22 +251,22 @@ async def api_send_file(request: web.Request) -> web.Response:
             except Exception:
                 caption = caption or title
 
-        # ── 🚀 BYPASS SETTINGS LOOP AND ATTEMPT DISPATCH IMMEDIATELY ──────────
+        # ── 🚀 FORCED DIRECT MEDIA DISPATCH BYPASS ────────────────────────────
         try:
+            logger.info("WebApp bypass engine attempting direct DM delivery for user: %s", user_id)
             await bot_client.send_cached_media(
                 chat_id=user_id,
-                file_id=cached_file_id,
+                file_id=str(cached_file_id),
                 caption=caption or title,
                 protect_content=protect_content,
             )
-            logger.info("Direct WebApp premium background delivery completed for user_id=%s", user_id)
             return web.json_response({"status": "direct_sent"}, status=200)
             
         except Exception as send_err:
-            # Automatic fallback notice if user blocked or has never message-started the bot privately
-            logger.warning("Direct delivery unreached for user %s, requesting deep link redirection fallback: %s", user_id, send_err)
+            logger.warning("Direct backdrop drop failed for user %s: %s", user_id, send_err)
+            # If they haven't started your bot privately yet, fall back to deep linking
             return web.json_response({"status": "redirect_required"}, status=200)
 
     except Exception as global_exc:
-        logger.exception("Runtime exception inside premium file delivery engine: %s", global_exc)
+        logger.exception("Runtime crash within direct delivery engine: %s", global_exc)
         return web.json_response({"status": "redirect_required"}, status=200)
