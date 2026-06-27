@@ -304,7 +304,6 @@ async def get_channel_subscriber_count(client: Client, target: str | int) -> int
     logger.warning("Unable to determine subscriber count for %r", target)
     return 0
 
-"""
 # This probe runs very early and should catch /subs even if another handler is being noisy.
 @Client.on_message(
     filters.private & filters.incoming & filters.text & filters.regex(r"^/subs(?:@\w+)?(?:\s|$)"),
@@ -319,3 +318,4 @@ async def subs_probe(client: Client, message: Message) -> None:
 async def subs_cmd(client: Client, message: Message) -> None:
     logger.info("Normal /subs command handler entered text=%r", message.text)
     await _handle_subs_request(client, message, source="command")
+"""
