@@ -338,16 +338,32 @@ function escHtml(s) {
 }
 
 // ── ✅ UPDATED: Native Direct Background Dispatch with showPopup ───────────
-async function getFile() {
-  const file = state.currentFile;
-  if (!file) return;
+// ── ✅ UPDATED: Native Direct Background Dispatch with showPopup & Spam Protection ──
+async function getFile(isSendAll = false) {
+  let targetId;
+  let isProtected = false;
+  
+  if (isSendAll) {
+     targetId = state.query; 
+     if (!targetId) return;
+  } else {
+     const file = state.currentFile;
+     if (!file) return;
+     targetId = file._id || file.file_id;
+     const cb = document.getElementById('protectContentCb');
+     if (cb) isProtected = cb.checked;
+  }
 
-  const targetId = file._id || file.file_id;
-  console.log(`Action requested: Fetch file execution for record payload reference token: ${targetId}`);
-
-  const actionBtn = document.querySelector('.btn-primary');
+  const actionBtn = isSendAll ? document.getElementById('sendAllBtn') : document.querySelector('.btn-primary');
   const originalText = actionBtn ? actionBtn.innerHTML : '📥 Get File';
-  if (actionBtn) actionBtn.innerHTML = '🔄 Processing...';
+  
+  // ✅ FIX: Lock the button so the user cannot spam click it
+  if (actionBtn) {
+      actionBtn.innerHTML = '🔄 Processing...';
+      actionBtn.disabled = true;
+      actionBtn.style.opacity = '0.7';
+      actionBtn.style.pointerEvents = 'none';
+  }
 
   try {
     const response = await fetch(`${BASE_URL}/api/send_file`, {
@@ -355,6 +371,8 @@ async function getFile() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         file_id: targetId,
+        is_send_all: isSendAll,
+        protect: isProtected,
         init_data: tg?.initData || "" 
       })
     });
@@ -362,40 +380,44 @@ async function getFile() {
     const resData = await response.json();
 
     if (response.ok && resData.status === 'direct_sent') {
-      // ✅ TRIGGER THE NATIVE POPUP DIALOG
+      // ✅ TRIGGER THE NATIVE POPUP DIALOG INSTANTLY
       if (tg && tg.showPopup) {
         tg.showPopup({
           title: "File Dispatched! 🚀",
-          message: "𝐂𝐡𝐞𝐜𝐤 𝐘𝐨𝐮𝐫 𝐏𝐫𝐢𝐯𝐚𝐭𝐞 𝐦𝐞𝐬𝐬𝐚𝐠𝐞, 𝐈 𝐡𝐚𝐯𝐞 𝐬𝐞𝐧𝐭 𝐟𝐢𝐥𝐞𝐬 𝐢𝐧 𝐩𝐦.\n\nMinimize or close this window to access your media on @Rashmika_mandanana_bot.",
+          message: "𝐂𝐡𝐞𝐜𝐤 𝐘𝐨𝐮𝐫 𝐏𝐫𝐢𝐯𝐚𝐭𝐞 𝐦𝐞𝐬𝐬𝐚𝐠𝐞, 𝐈 𝐡𝐚𝐯𝐞 𝐬𝐞𝐧𝐭 𝐟𝐢𝐥𝐞𝐬 𝐢𝐧 𝐩𝐦.\n\nMinimize or close this window to access your media.",
           buttons: [{ id: "ok", type: "default", text: "OK, Got It!" }]
         });
       } else {
-        alert("𝐂𝐡𝐞𝐜𝐤 𝐘𝐨𝐮𝐫 𝐏𝐫𝐢𝐯𝐚𝐭𝐞 𝐦𝐞𝐬𝐬𝐚𝐠𝐞, 𝐈 𝐡𝐚𝐯𝐞 𝐬𝐞𝐧𝐭 𝐟𝐢𝐥𝐞𝐬 𝐢𝐧 𝐩𝐦.\n\nMinimize or close this window to access your media on @Rashmika_mandanana_bot.");
+        alert("𝐂𝐡𝐞𝐜𝐤 𝐘𝐨𝐮𝐫 𝐏𝐫𝐢𝐯𝐚𝐭𝐞 𝐦𝐞𝐬𝐬𝐚𝐠𝐞, 𝐈 𝐡𝐚𝐯𝐞 𝐬𝐞𝐧𝐭 𝐟𝐢𝐥𝐞𝐬 𝐢𝐧 𝐩𝐦.");
       }
-      closeSheet();
+      if (!isSendAll) closeSheet();
       return;
     }
     
     // Fallback to deep link redirection
     if (tg) {
-      const botUsername = "Rashmi_v2_bot"; 
-      const deepLinkUrl = `https://t.me/${botUsername}?start=get_${targetId}`;
-      tg.openTelegramLink(deepLinkUrl);
+      const prefix = isSendAll ? "allfiles" : "get";
+      tg.openTelegramLink(`https://t.me/Rashmi_v2_bot?start=${prefix}_${targetId}`);
       tg.close();
     } else {
-      navigator.clipboard?.writeText(`get_${targetId}`)
-        .then(() => showFeedback('Query token copied!'))
-        .catch(() => showFeedback('Clipboard integration fallback failure'));
-      closeSheet();
+      navigator.clipboard?.writeText(`get_${targetId}`).then(() => showFeedback('Query token copied!'));
+      if (!isSendAll) closeSheet();
     }
 
   } catch (err) {
-    console.error("Premium background file pipeline hit a snag. Reverting to safe deep-link:", err);
+    console.error("Pipeline snag. Reverting to safe deep-link:", err);
     if (tg) {
-      tg.openTelegramLink(`https://t.me/Rashmi_v2_bot?start=get_${targetId}`);
+      const prefix = isSendAll ? "allfiles" : "get";
+      tg.openTelegramLink(`https://t.me/Rashmi_v2_bot?start=${prefix}_${targetId}`);
     }
   } finally {
-    if (actionBtn) actionBtn.innerHTML = originalText;
+    // ✅ FIX: Unlock the button if the user stays on the screen
+    if (actionBtn) {
+        actionBtn.innerHTML = originalText;
+        actionBtn.disabled = false;
+        actionBtn.style.opacity = '1';
+        actionBtn.style.pointerEvents = 'auto';
+    }
   }
 }
 
