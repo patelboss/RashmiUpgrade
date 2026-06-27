@@ -26,10 +26,8 @@ shortzy>=0.0.8
 ujson>=5.9.0
 pytz>=2023.3
 pyromod>=0.1.5
+beautifulsoup4>=4.12.0
+tldextract>=5.1.0
 
 # Web app support
 aiohttp-cors>=0.7.0
-
-# Linting / quality (dev only - remove from prod if desired)
-# black>=23.0
-# flake8>=6.0
