@@ -110,31 +110,26 @@ def _extract_file_id(payload: str) -> str:
     return payload.strip()
 
 
-@Client.on_message(filters.command("wtry") & filters.private)
+@Client.on_message(filters.command('wtry') & filters.incoming)
 async def wtry_cmd(client: Client, message: Message) -> None:
-    """
-    Tiny diagnostic command.
-    If this replies, the file is imported and the handler is registered.
-    """
     user_id = message.from_user.id if message.from_user else "Unknown"
-    logger.info("Command /wtry triggered by user ID: %s", user_id)
-
+    logger.info("Command /wtry successfully fired by user ID: %s", user_id)
     await message.reply_text(
-        "✅ wtry reached this file and the handler is alive.",
+        "<b>Testing Phase 1 Active</b>\n\nHandler is responsive inside webappcmd file.",
         parse_mode=enums.ParseMode.HTML,
     )
+
+
+# ── COMMAND 2: /wtry2 ─────────────────────────────────────────────────────────
 @Client.on_message(filters.command("wtry2") & filters.private)
 async def wtry2_cmd(client: Client, message: Message) -> None:
-    # 1. Properly resolve the user_id from the incoming message object
     user_id = message.from_user.id if message.from_user else "Unknown"
-    logger.info("Command /wtry2 triggered by user ID: %s", user_id)
-    
-    # 2. message is now an accessible parameter, allowing the reply to send
+    logger.info("Command /wtry2 successfully fired by user ID: %s", user_id)
     await message.reply_text(
-        "✅ wtry2 reached this file and the handler is alive.",
+        "✅ <b>wtry2 reached this file and the handler is completely alive.</b>",
         parse_mode=enums.ParseMode.HTML,
     )
-
+    
 
 @Client.on_message(filters.command("webapp") & filters.private)
 async def webapp_cmd(client: Client, message: Message) -> None:
