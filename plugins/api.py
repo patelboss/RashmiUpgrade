@@ -15,6 +15,7 @@ import datetime
 import logging
 
 from aiohttp import web
+ from plugins.subs_cmd import get_channel_subscriber_count
 
 from database.ia_filterdb import Media, get_search_results
 from database.users_chats_db import db as users_db
@@ -100,7 +101,9 @@ async def _fetch_and_cache_stats() -> None:
     # This build intentionally avoids importing bot.py or any runtime client state.
     # Channel-level metrics like subscriber count and latest promo text are left as
     # safe placeholders so the API stays stable without a live Pyrogram reference.
-    subscriber_count = 0
+   
+    subscriber_count = await get_channel_subscriber_count(client, AUTH_CHANNEL)
+  #subscriber_count = 0
     latest_promo_text = ""
     logger.info(
         "WebApp stats running in DB-only mode; live channel metrics are disabled in this build."
@@ -169,3 +172,5 @@ async def api_stats(request: web.Request) -> web.Response:
             return web.json_response(_STATS_CACHE)
 
         return web.json_response({"error": "Stats unavailable"}, status=500)
+
+
