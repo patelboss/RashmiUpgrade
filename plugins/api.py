@@ -6,6 +6,7 @@ Endpoints:
   GET /api/search?q=<query>&offset=<n>&max=<n>&type=<video|audio|document>
   GET /api/recent?max=<n>
   GET /api/stats
+  POST /api/send_file  <-- New premium bypass delivery endpoint
 """
 
 from __future__ import annotations
@@ -13,7 +14,8 @@ from __future__ import annotations
 import asyncio
 import datetime
 import logging
-#from pyrogram import Client
+import ujson
+from urllib.parse import parse_qsl
 from aiohttp import web
 from plugins.subs_cmd import get_channel_subscriber_count
 
@@ -47,6 +49,20 @@ def _serialize_file(doc) -> dict:
         "mime_type": raw.get("mime_type", ""),
         "caption": raw.get("caption", ""),
     }
+
+
+def _verify_and_extract_user(init_data: str) -> int | None:
+    """Parses Telegram WebApp initData string context to safely extract the User ID."""
+    if not init_data:
+        return None
+    try:
+        params = dict(parse_qsl(init_data))
+        if "user" in params:
+            user_data = ujson.loads(params["user"])
+            return int(user_data.get("id"))
+    except Exception as e:
+        logger.warning("Failed to parse init_data validation fields: %s", e)
+    return None
 
 
 @api_routes.get("/api/search")
@@ -98,11 +114,6 @@ async def _fetch_and_cache_stats() -> None:
     total_users = await users_db.total_users_count()
     total_chats = await users_db.total_chat_count()
 
-    # This build intentionally avoids importing bot.py or any runtime client state.
-    # Channel-level metrics like subscriber count and latest promo text are left as
-    # safe placeholders so the API stays stable without a live Pyrogram reference.
-   
-    #subscriber_count = await get_channel_subscriber_count(@Client , AUTH_CHANNEL)
     subscriber_count = 6000
     latest_promo_text = "Comming Soon 🔜"
     logger.info(
@@ -174,3 +185,76 @@ async def api_stats(request: web.Request) -> web.Response:
         return web.json_response({"error": "Stats unavailable"}, status=500)
 
 
+# ── ✅ ADDED: POST ENDPOINT FOR DIRECT PREMIUM DISPATCH ───────────────────────
+@api_routes.post("/api/send_file")
+async def api_send_file(request: web.Request) -> web.Response:
+    try:
+        import variables
+        from database.ia_filterdb import get_file_details
+        from utils import clean_file_name, get_size
+
+        data = await request.json()
+        raw_file_id = data.get("file_id")
+        init_data = data.get("init_data")
+
+        # 1. Parse and extract User ID from WebApp initData query string context
+        user_id = _verify_and_extract_user(init_data)
+        if not user_id:
+            return web.json_response({"error": "Unauthorized user validation failed"}, status=401)
+
+        # 2. Grab your shared live bot client reference from aiohttp application context
+        bot_client = request.app.get("bot_client")
+        if not bot_client:
+            return web.json_response({"error": "Core framework pipeline offline"}, status=500)
+
+        # 3. Pull documents metrics from DB matching target hash indices
+        files = await get_file_details(raw_file_id)
+        if not files:
+            return web.json_response({"error": "File entry absent from DB"}, status=404)
+
+        f = files if isinstance(files, (list, tuple)) else files
+        cached_file_id = getattr(f, "file_id", "") or f.get("file_id", "")
+        original_name = getattr(f, "file_name", "") or f.get("file_name", "")
+        original_size = getattr(f, "file_size", 0) or f.get("file_size", 0)
+        original_caption = getattr(f, "caption", "") or f.get("caption", "")
+
+        # 4. Process layout caption rules strings matching global variable states
+        title = clean_file_name(str(original_name or raw_file_id))
+        try:
+            size = get_size(int(original_size))
+        except Exception:
+            size = ""
+
+        caption = original_caption
+        custom_caption = getattr(variables, "CUSTOM_FILE_CAPTION", "")
+        protect_content = bool(getattr(variables, "PROTECT_CONTENT", False))
+
+        if custom_caption:
+            try:
+                caption = custom_caption.format(
+                    file_name=title or "",
+                    file_size=size or "",
+                    file_caption=caption or "",
+                )
+            except Exception:
+                caption = caption or title
+
+        # ── 🚀 BYPASS SETTINGS LOOP AND ATTEMPT DISPATCH IMMEDIATELY ──────────
+        try:
+            await bot_client.send_cached_media(
+                chat_id=user_id,
+                file_id=cached_file_id,
+                caption=caption or title,
+                protect_content=protect_content,
+            )
+            logger.info("Direct WebApp premium background delivery completed for user_id=%s", user_id)
+            return web.json_response({"status": "direct_sent"}, status=200)
+            
+        except Exception as send_err:
+            # Automatic fallback notice if user blocked or has never message-started the bot privately
+            logger.warning("Direct delivery unreached for user %s, requesting deep link redirection fallback: %s", user_id, send_err)
+            return web.json_response({"status": "redirect_required"}, status=200)
+
+    except Exception as global_exc:
+        logger.exception("Runtime exception inside premium file delivery engine: %s", global_exc)
+        return web.json_response({"status": "redirect_required"}, status=200)
