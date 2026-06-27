@@ -7,7 +7,6 @@ Endpoints:
   GET /api/recent?max=<n>
   GET /api/stats
 """
-import json
 import logging
 
 from aiohttp import web
@@ -81,16 +80,43 @@ async def api_recent(request: web.Request) -> web.Response:
 @api_routes.get("/api/stats")
 async def api_stats(request: web.Request) -> web.Response:
     try:
+        from info import AUTH_CHANNEL
+        from bot import app as pyrogram_client
+
+        # ── Core DB counters ──────────────────────────────────────────────
         total_files   = await Media.count_documents({})
         total_users   = await users_db.total_users_count()
         total_chats   = await users_db.total_chats_count()
         f_cols, f_cnt = await filter_stats()
+
+        # ── Subscriber count via Pyrogram client cache ────────────────────
+        subscriber_count = 0
+        if AUTH_CHANNEL:
+            try:
+                chat = await pyrogram_client.get_chat(AUTH_CHANNEL)
+                subscriber_count = getattr(chat, "members_count", 0) or 0
+            except Exception as e:
+                logger.warning("Could not fetch subscriber count: %s", e)
+
+        # ── Latest promo post text from AUTH_CHANNEL ──────────────────────
+        latest_promo_text = ""
+        if AUTH_CHANNEL:
+            try:
+                # Using history iteration limit=1 guarantees we always catch the exact latest post safely
+                async for msg in pyrogram_client.get_chat_history(AUTH_CHANNEL, limit=1):
+                    latest_promo_text = msg.text or msg.caption or ""
+                    break
+            except Exception as e:
+                logger.warning("Could not fetch latest promo post: %s", e)
+
         return web.json_response({
-            "total_files":   total_files,
-            "total_users":   total_users,
-            "total_chats":   total_chats,
-            "total_filters": f_cnt,
-            "filter_groups": f_cols,
+            "total_files":        total_files,
+            "total_users":        total_users,
+            "total_chats":        total_chats,
+            "total_filters":      f_cnt,
+            "filter_groups":      f_cols,
+            "subscriber_count":   subscriber_count,
+            "latest_promo_text":  latest_promo_text,
         })
     except Exception as exc:
         logger.exception("Stats API error: %s", exc)
