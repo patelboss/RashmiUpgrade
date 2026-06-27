@@ -220,12 +220,14 @@ async def api_send_file(request: web.Request) -> web.Response:
             return web.json_response({"status": "redirect_required"}, status=200)
 
         # ── 🛠️ BUILD ENVIRONMENT MOCKS ────────────────────────────────────────
-        # ✅ FIX 2: Explicitly pass your static group chat ID context parameter
+        # Explicitly pass your static group chat ID context parameter
         DUMMY_CHAT_ID = -1001860020592
         mock_chat = type("MockChat", (object,), {"id": DUMMY_CHAT_ID, "type": ChatType.SUPERGROUP})()
         
         async def mock_reply_func(*args, **kwargs):
-            return await bot_client.send_message(chat_id=user_id, text=args)
+            # Extract the actual text string from the args tuple
+            text_content = args if args else "Action processed."
+            return await bot_client.send_message(chat_id=user_id, text=text_content)
 
         mock_msg = type(
             "MockMessage", 
@@ -240,7 +242,7 @@ async def api_send_file(request: web.Request) -> web.Response:
 
         mock_user = type("MockUser", (object,), {"id": user_id, "first_name": "User"})()
 
-        # ✅ FIX 3: Map data prefix based on structural privacy requirements
+        # Map data prefix based on structural privacy requirements
         prefix = "filep" if is_protected else "file"
 
         # Build complete custom CallbackQuery template instance matching native variables
@@ -258,10 +260,14 @@ async def api_send_file(request: web.Request) -> web.Response:
             }
         )()
 
-        # ── ⚡ INJECT INTO NATIVE FILTER SYSTEM ──
+        # ── ⚡ INJECT INTO NATIVE FILTER SYSTEM (AS BACKGROUND TASK) ──
         logger.info("Forwarding mock WebApp event payload straight to pm_filter.cb_handler -> User: %s | Data: %s", user_id, mock_query.data)
-        await cb_handler(bot_client, mock_query)
+        
+        # ✅ FIX 2: Execute as a non-blocking background task. 
+        # This prevents the web server from hanging while waiting for your auto-delete timer!
+        asyncio.create_task(cb_handler(bot_client, mock_query))
 
+        # Return the success response immediately so the frontend popup can trigger.
         return web.json_response({"status": "direct_sent"}, status=200)
 
     except Exception as global_exc:
