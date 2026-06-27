@@ -136,7 +136,7 @@ function renderCard(file) {
         <span class="file-type-badge ${typeBadgeClass(type)}">${type || 'file'}</span>
         <span class="file-size">${fmt(file.file_size)}</span>
       </div>
-      ${file.caption ? `<div class="file_name">${escHtml(file.caption)}</div>` : ''}
+      <div class="file-caption">${escHtml(file.file_name || 'Untitled')}</div>
     </div>
     <svg class="file-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
   `;
