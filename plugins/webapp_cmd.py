@@ -31,7 +31,7 @@ def _webapp_url() -> str:
     return ""
 
 
-@Client.on_message(filters.command('webapp'))
+@Client.on_message(filters.command('mini_app'))
 async def webapp_cmd(client: Client, message: Message) -> None:
     """Send an inline button that opens the Telegram Web App."""
     user_id = message.from_user.id if message.from_user else "Unknown"
