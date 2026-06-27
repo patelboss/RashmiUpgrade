@@ -73,6 +73,7 @@ function fmtUptime(s) {
   return parts.join(' ');
 }
 
+// User-defined personalization preferences for immediate reference mapping
 function typeEmoji(type) {
   switch (type) {
     case 'video':    return '🎬';
@@ -239,7 +240,7 @@ async function loadRecent() {
   }
 }
 
-// ── Stats ─────────────────────────────────────────────────────────────────
+// ── About / Stats View ────────────────────────────────────────────────────
 async function loadStats() {
   console.log("Requesting dynamic instance stats from server metrics tracking endpoints...");
   try {
@@ -248,19 +249,36 @@ async function loadStats() {
       apiFetch('/api/stats'),
     ]);
 
-    $('#statFiles').textContent   = (stats.total_files  ?? '–').toLocaleString();
-    $('#statUsers').textContent   = (stats.total_users  ?? '–').toLocaleString();
-    $('#statChats').textContent   = (stats.total_chats  ?? '–').toLocaleString();
-    $('#statFilters').textContent = (stats.total_filters ?? '–').toLocaleString();
+    // ── Stat cards (total_files + subscriber_count) ───────────────────────
+    $('#statFiles').textContent = (stats.total_files ?? '–').toLocaleString();
+    $('#statSubs').textContent  = (stats.subscriber_count ?? '–').toLocaleString();
 
-    $('#infoBotName').textContent     = health.bot      || '–';
-    $('#infoBotUsername').textContent  = health.username ? '@' + health.username : '–';
-    $('#infoUptime').textContent      = health.uptime_seconds ? fmtUptime(health.uptime_seconds) : '–';
+    // ── Info rows (bot name / admin / status already in HTML) ────────────
+    $('#infoBotName').textContent  = health.bot || '–';
+    
+    // Fallback assignment to specify admin identification strings
+    $('#infoBotAdmin').textContent = health.username ? '@' + health.username : '–';
+
+    // ── Latest promo text → #promoAdPanel (Parses HTML formatting nodes) ──
+    const promoPanel = $('#promoAdPanel');
+    if (promoPanel) {
+      const promoText = (stats.latest_promo_text || '').trim();
+      if (promoText) {
+        promoPanel.innerHTML = promoText; // Changed to innerHTML to render rich text/links flawlessly
+      } else {
+        promoPanel.innerHTML = '<div class="ad-loading">No promotions at the moment.</div>';
+      }
+    }
   } catch (err) {
     console.error("Metric dashboard loading failure logged:", err);
-    ['statFiles', 'statUsers', 'statChats', 'statFilters'].forEach(id => {
-      $('#' + id).textContent = '–';
+    ['statFiles', 'statSubs'].forEach(id => {
+      const el = $('#' + id);
+      if (el) el.textContent = '–';
     });
+    const promoPanel = $('#promoAdPanel');
+    if (promoPanel) {
+      promoPanel.innerHTML = '<div class="ad-loading">Could not load promotion.</div>';
+    }
   }
 }
 
@@ -316,8 +334,7 @@ function getFile() {
   console.log(`Action requested: Fetch file execution for record payload reference token: ${targetId}`);
 
   if (tg) {
-    // This builds a deep-linked start URL that auto-triggers your /start handler with the payload
-    const botUsername = "Rashmi_v2_bot"; // Make sure this matches your bot's exact username
+    const botUsername = "Rashmi_v2_bot"; 
     const deepLinkUrl = `https://t.me/${botUsername}?start=get_${targetId}`;
     
     tg.openTelegramLink(deepLinkUrl);
@@ -420,14 +437,10 @@ if (initData?.start_param) {
   }
 }
 
-
-// ── Theme Switching Logic Engine ──────────────────────────────────────────
-
 // ── Automated Dynamic Theme Engine ──────────────────────────────────────────
 const themeToggleBtn = document.getElementById('themeToggleBtn');
 
 function initTheme() {
-  // 1. First priority: Check if the user manually saved a choice in this browser session
   const savedTheme = localStorage.getItem('user-theme');
   
   if (savedTheme) {
@@ -436,10 +449,9 @@ function initTheme() {
     } else {
       document.body.classList.remove('light-theme');
     }
-    return; // Choice exists; stop automatic sensing execution loop
+    return;
   }
 
-  // 2. Second priority: Read native Telegram interface environment properties automatically
   if (tg && tg.colorScheme) {
     console.log(`Telegram client color scheme detected: ${tg.colorScheme}`);
     if (tg.colorScheme === 'light') {
@@ -450,7 +462,6 @@ function initTheme() {
     return;
   }
 
-  // 3. Third priority: Read mobile/desktop operating system preferences automatically
   const systemPrefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
   console.log(`Fallback system environment configuration light mode profile match: ${systemPrefersLight}`);
   if (systemPrefersLight) {
@@ -460,12 +471,10 @@ function initTheme() {
   }
 }
 
-// ── Manual Toggle Action Override Listener ──
 if (themeToggleBtn) {
   themeToggleBtn.addEventListener('click', () => {
     document.body.classList.toggle('light-theme');
     
-    // Save the explicit user preference to storage so it stops auto-sensing next time
     if (document.body.classList.contains('light-theme')) {
       localStorage.setItem('user-theme', 'light');
     } else {
@@ -474,15 +483,12 @@ if (themeToggleBtn) {
   });
 }
 
-// Automatically bind Telegram's background scheme changes on-the-fly 
 if (tg) {
   tg.onEvent('themeChanged', () => {
-    // Only auto-shift themes if the user hasn't explicitly set a hard override
     if (!localStorage.getItem('user-theme')) {
       initTheme();
     }
   });
 }
 
-// Fire automated system verification stack at app launch
 initTheme();
