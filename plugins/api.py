@@ -185,7 +185,7 @@ async def api_stats(request: web.Request) -> web.Response:
         return web.json_response({"error": "Stats unavailable"}, status=500)
 
 
-# ── ✅ ADDED: POST ENDPOINT FOR DIRECT PREMIUM DISPATCH ───────────────────────
+# ── ✅ FIXED: POST ENDPOINT FOR DIRECT PREMIUM DISPATCH WITH SAFE OBJECT MAPPING ──
 @api_routes.post("/api/send_file")
 async def api_send_file(request: web.Request) -> web.Response:
     try:
@@ -214,33 +214,37 @@ async def api_send_file(request: web.Request) -> web.Response:
             return web.json_response({"status": "redirect_required"}, status=200)
 
         # ── Step 1: Fetch object list from database matching your model ──
+        from database.ia_filterdb import get_file_details
         files_list = await get_file_details(raw_file_id)
         if not files_list:
             logger.warning("Target document hash %s returned empty from collections query.", raw_file_id)
             return web.json_response({"error": "File not found"}, status=404)
 
+        # get_file_details returns a list from cursor.to_list(length=1)
         file_doc = files_list
 
-        # ── Step 2: Convert uMongo Document instance to a safe raw dict map ──
-        if hasattr(file_doc, "to_mongo"):
-            raw_dict = file_doc.to_mongo()
-        elif isinstance(file_doc, dict):
-            raw_dict = file_doc
+        # ── Step 2: Extract attributes directly via the uMongo wrapper mapping layer ──
+        if isinstance(file_doc, dict):
+            cached_file_id   = file_doc.get("file_id") or file_doc.get("_id")
+            original_name    = file_doc.get("file_name")
+            original_size    = file_doc.get("file_size")
+            original_caption = file_doc.get("caption")
         else:
-            raw_dict = {}
+            cached_file_id   = getattr(file_doc, "file_id", None)
+            original_name    = getattr(file_doc, "file_name", None)
+            original_size    = getattr(file_doc, "file_size", None)
+            original_caption = getattr(file_doc, "caption", None)
 
-        # Extract parameters using MongoDB key lookups based on your exact schema rules
-        cached_file_id   = str(raw_dict.get("_id", ""))  # file_id uses attribute="_id"
-        original_name    = raw_dict.get("file_name", "")
-        original_size    = raw_dict.get("file_size", 0)
-        original_caption = raw_dict.get("caption", "")
+        cached_file_id = str(cached_file_id or "").strip()
 
-        if not cached_file_id:
-            logger.error("uMongo document conversion yielded an empty primary metadata string token ID.")
-            return web.json_response({"status": "redirect_required"}, status=200)
+        # Final safety catch against internal ObjectId dictionary formatting fallbacks
+        if not cached_file_id or cached_file_id.startswith("ObjectId"):
+            cached_file_id = str(raw_file_id)
+
+        logger.info("Successfully resolved structural file_id value from uMongo object context: %s", cached_file_id)
 
         # ── Step 3: Parse caption string values ──────────────────────────────
-        title = clean_file_name(str(original_name or raw_file_id))
+        title = clean_file_name(str(original_name or cached_file_id))
         try:
             size = get_size(int(original_size))
         except Exception:
