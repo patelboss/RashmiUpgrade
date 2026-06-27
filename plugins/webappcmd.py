@@ -120,15 +120,6 @@ async def wtry_cmd(client: Client, message: Message) -> None:
     )
 
 
-# ── COMMAND 2: /wtry2 ─────────────────────────────────────────────────────────
-@Client.on_message(filters.command("wtry2") & filters.private)
-async def wtry2_cmd(client: Client, message: Message) -> None:
-    user_id = message.from_user.id if message.from_user else "Unknown"
-    logger.info("Command /wtry2 successfully fired by user ID: %s", user_id)
-    await message.reply_text(
-        "✅ <b>wtry2 reached this file and the handler is completely alive.</b>",
-        parse_mode=enums.ParseMode.HTML,
-    )
     
 
 @Client.on_message(filters.command("webapp") & filters.private)
