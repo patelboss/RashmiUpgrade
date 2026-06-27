@@ -13,7 +13,7 @@ from __future__ import annotations
 import asyncio
 import datetime
 import logging
-from pyrogram import Client
+#from pyrogram import Client
 from aiohttp import web
 from plugins.subs_cmd import get_channel_subscriber_count
 
