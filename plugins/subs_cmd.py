@@ -6,9 +6,8 @@ It reports the easiest stats the running bot can fetch without touching the DB.
 from __future__ import annotations
 
 import logging
-import re
 import sys
-from typing import Any, Optional
+from typing import Any
 
 from pyrogram import Client, filters, enums
 from pyrogram.errors import RPCError
@@ -39,7 +38,7 @@ def _normalize_target(raw: str) -> str:
       - username
       - -1001234567890
       - https://t.me/username
-      - https://t.me/c/1234567890/42  (best effort: not always resolvable directly)
+      - https://t.me/c/1234567890/42  (best effort)
     """
     value = (raw or "").strip()
 
@@ -51,7 +50,6 @@ def _normalize_target(raw: str) -> str:
     if value.startswith("t.me/"):
         value = value.removeprefix("t.me/").strip("/")
 
-    # Keep @username as-is; Pyrogram can usually resolve it.
     if value.startswith("@"):
         return value
 
@@ -81,7 +79,12 @@ async def _fetch_channel_stats(client: Client, target: str) -> dict[str, Any]:
     logger.info("Resolving target: %r", target)
 
     chat = await client.get_chat(target)
-    logger.info("get_chat() succeeded for target=%r | id=%s | title=%r", target, getattr(chat, "id", None), getattr(chat, "title", None))
+    logger.info(
+        "get_chat() succeeded for target=%r | id=%s | title=%r",
+        target,
+        getattr(chat, "id", None),
+        getattr(chat, "title", None),
+    )
 
     stats: dict[str, Any] = {
         "title": _field(chat, "title", ""),
@@ -102,7 +105,11 @@ async def _fetch_channel_stats(client: Client, target: str) -> dict[str, Any]:
         try:
             if hasattr(client, "get_chat_members_count"):
                 stats["members_count"] = await client.get_chat_members_count(target)
-                logger.info("get_chat_members_count() succeeded for target=%r -> %s", target, stats["members_count"])
+                logger.info(
+                    "get_chat_members_count() succeeded for target=%r -> %s",
+                    target,
+                    stats["members_count"],
+                )
         except Exception as exc:
             logger.warning("get_chat_members_count failed for %r: %s", target, exc, exc_info=True)
 
@@ -171,13 +178,25 @@ def _format_stats(stats: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-@Client.on_message(filters.command("subs") & filters.private)
-async def subs_cmd(client: Client, message: Message) -> None:
+async def _handle_subs_request(client: Client, message: Message, source: str) -> None:
+    """
+    Shared implementation used by both the early probe and the normal command handler.
+    """
     user_id = message.from_user.id if message.from_user else "Unknown"
-    logger.info("Command /subs triggered by user_id=%s | text=%r", user_id, message.text)
+    logger.info("Handler path=%s | user_id=%s | text=%r", source, user_id, message.text)
 
     try:
-        if not message.command or len(message.command) < 2:
+        raw_text = (message.text or "").strip()
+
+        if not raw_text:
+            await message.reply_text(
+                "<b>❌ Empty request.</b>",
+                parse_mode=enums.ParseMode.HTML,
+            )
+            return
+
+        parts = raw_text.split(maxsplit=1)
+        if len(parts) < 2:
             await message.reply_text(
                 "<b>Usage:</b> <code>/subs @channelusername</code>\n"
                 "<b>Or:</b> <code>/subs -1001234567890</code>",
@@ -185,10 +204,15 @@ async def subs_cmd(client: Client, message: Message) -> None:
             )
             return
 
-        raw_target = " ".join(message.command[1:]).strip()
+        raw_target = parts[1].strip()
         target = _normalize_target(raw_target)
 
-        logger.info("Parsed /subs target | raw=%r | normalized=%r", raw_target, target)
+        logger.info(
+            "Parsed /subs target | source=%s | raw=%r | normalized=%r",
+            source,
+            raw_target,
+            target,
+        )
 
         if not target:
             await message.reply_text(
@@ -205,7 +229,7 @@ async def subs_cmd(client: Client, message: Message) -> None:
         try:
             stats = await _fetch_channel_stats(client, target)
             reply = _format_stats(stats)
-            logger.info("Stats fetch complete for target=%r", target)
+            logger.info("Stats fetch complete for target=%r via %s", target, source)
             await status.edit_text(reply, parse_mode=enums.ParseMode.HTML)
         except RPCError as rpc_err:
             logger.exception("Pyrogram RPCError while fetching stats for %r", target)
@@ -221,7 +245,7 @@ async def subs_cmd(client: Client, message: Message) -> None:
             )
 
     except Exception as outer_exc:
-        logger.exception("Fatal /subs handler error for user_id=%s", user_id)
+        logger.exception("Fatal /subs handler error for user_id=%s via %s", user_id, source)
         try:
             await message.reply_text(
                 f"<b>❌ /subs crashed:</b>\n<code>{outer_exc}</code>",
@@ -229,3 +253,19 @@ async def subs_cmd(client: Client, message: Message) -> None:
             )
         except Exception:
             pass
+
+
+# This probe runs very early and should catch /subs even if another handler is being noisy.
+@Client.on_message(
+    filters.private & filters.incoming & filters.text & filters.regex(r"^/subs(?:@\w+)?(?:\s|$)"),
+    group=-10000,
+)
+async def subs_probe(client: Client, message: Message) -> None:
+    logger.info("Early /subs probe matched text=%r", message.text)
+    await _handle_subs_request(client, message, source="probe")
+
+
+@Client.on_message(filters.command("subs") & filters.private)
+async def subs_cmd(client: Client, message: Message) -> None:
+    logger.info("Normal /subs command handler entered text=%r", message.text)
+    await _handle_subs_request(client, message, source="command")
