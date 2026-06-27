@@ -193,44 +193,53 @@ async def api_send_file(request: web.Request) -> web.Response:
         from database.ia_filterdb import get_file_details
         from utils import clean_file_name, get_size
 
-        data = await request.json()
-        raw_file_id = data.get("file_id")
-        
-        # Pull the direct user_id sent from the front-end layer
-        user_id = data.get("user_id")
-        init_data = data.get("init_data")
+        # 1. Unpack incoming JSON payload fields
+        payload = await request.json()
+        raw_file_id = payload.get("file_id")
+        user_id = payload.get("user_id")
+        init_data = payload.get("init_data")
 
         if not user_id:
             user_id = _verify_and_extract_user(init_data)
 
         if not user_id:
-            logger.warning("File delivery aborted: No valid user identifier parsed.")
+            logger.warning("Bypass Delivery aborted: No valid user_id resolved.")
             return web.json_response({"status": "redirect_required"}, status=200)
 
-        # Force structural format matching for Pyrogram chat_id target integers
         user_id = int(user_id)
 
         bot_client = request.app.get("bot_client")
         if not bot_client:
-            logger.error("Aiohttp request app configuration context is missing 'bot_client'.")
+            logger.error("Core engine instance context 'bot_client' missing from web app server stack.")
             return web.json_response({"status": "redirect_required"}, status=200)
 
-        # Retrieve direct details from the DB matching raw identifier string hashes
-        files = await get_file_details(raw_file_id)
-        if not files:
-            return web.json_response({"error": "File entry absent from DB indices"}, status=404)
+        # ── Step 1: Fetch object list from database matching your model ──
+        files_list = await get_file_details(raw_file_id)
+        if not files_list:
+            logger.warning("Target document hash %s returned empty from collections query.", raw_file_id)
+            return web.json_response({"error": "File not found"}, status=404)
 
-        f = files if isinstance(files, (list, tuple)) else files
-        
-        # Access properties using fallback get dictionaries matching dictionary shapes
-        cached_file_id = f.get("file_id") if isinstance(f, dict) else getattr(f, "file_id", "")
-        original_name = f.get("file_name") if isinstance(f, dict) else getattr(f, "file_name", "")
-        original_size = f.get("file_size") if isinstance(f, dict) else getattr(f, "file_size", 0)
-        original_caption = f.get("caption") if isinstance(f, dict) else getattr(f, "caption", "")
+        file_doc = files_list
+
+        # ── Step 2: Convert uMongo Document instance to a safe raw dict map ──
+        if hasattr(file_doc, "to_mongo"):
+            raw_dict = file_doc.to_mongo()
+        elif isinstance(file_doc, dict):
+            raw_dict = file_doc
+        else:
+            raw_dict = {}
+
+        # Extract parameters using MongoDB key lookups based on your exact schema rules
+        cached_file_id   = str(raw_dict.get("_id", ""))  # file_id uses attribute="_id"
+        original_name    = raw_dict.get("file_name", "")
+        original_size    = raw_dict.get("file_size", 0)
+        original_caption = raw_dict.get("caption", "")
 
         if not cached_file_id:
-            return web.json_response({"error": "Document media hash payload missing"}, status=400)
+            logger.error("uMongo document conversion yielded an empty primary metadata string token ID.")
+            return web.json_response({"status": "redirect_required"}, status=200)
 
+        # ── Step 3: Parse caption string values ──────────────────────────────
         title = clean_file_name(str(original_name or raw_file_id))
         try:
             size = get_size(int(original_size))
@@ -248,25 +257,27 @@ async def api_send_file(request: web.Request) -> web.Response:
                     file_size=size or "",
                     file_caption=caption or "",
                 )
-            except Exception:
+            except Exception as fe:
+                logger.error("Caption metadata macro string compilation exception occurred: %s", fe)
                 caption = caption or title
 
-        # ── 🚀 FORCED DIRECT MEDIA DISPATCH BYPASS ────────────────────────────
+        # ── Step 4: Fire direct private chat delivery bypass ─────────────────
         try:
-            logger.info("WebApp bypass engine attempting direct DM delivery for user: %s", user_id)
+            logger.info("Executing direct background cached media delivery bypass channel for chat: %s", user_id)
+            
             await bot_client.send_cached_media(
                 chat_id=user_id,
-                file_id=str(cached_file_id),
+                file_id=cached_file_id,
                 caption=caption or title,
-                protect_content=protect_content,
+                protect_content=protect_content
             )
-            return web.json_response({"status": "direct_sent"}, status=200)
             
+            return web.json_response({"status": "direct_sent"}, status=200)
+
         except Exception as send_err:
-            logger.warning("Direct backdrop drop failed for user %s: %s", user_id, send_err)
-            # If they haven't started your bot privately yet, fall back to deep linking
+            logger.warning("Direct backdrop transmission unreached for profile %s. Flipping to link window: %s", user_id, send_err)
             return web.json_response({"status": "redirect_required"}, status=200)
 
     except Exception as global_exc:
-        logger.exception("Runtime crash within direct delivery engine: %s", global_exc)
+        logger.exception("Global breakdown inside WebApp file dispatch backend handler: %s", global_exc)
         return web.json_response({"status": "redirect_required"}, status=200)
