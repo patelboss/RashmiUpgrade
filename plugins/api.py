@@ -118,7 +118,7 @@ async def _fetch_and_cache_stats() -> None:
     total_users = await users_db.total_users_count()
     total_chats = await users_db.total_chat_count()
 
-    subscriber_count = await get_channel_subscriber_count(client, AUTH_CHANNEL)prin 
+    subscriber_count = await get_channel_subscriber_count(client, AUTH_CHANNEL)
     logger.info("AUTH_CHANNEL=%s | subscriber_count=%s",AUTH_CHANNEL, subscriber_count, )
     latest_promo_text = "Comming Soon 🔜"
     logger.info(
