@@ -16,7 +16,11 @@ requests>=2.31.0
 urllib3>=2.1.0
 
 # Search
+#rapidfuzz>=3.5.0
+# Search
 rapidfuzz>=3.5.0
+fuzzywuzzy>=0.18.0
+python-Levenshtein>=0.23.0
 
 # IMDB
 cinemagoer>=2023.5.1
