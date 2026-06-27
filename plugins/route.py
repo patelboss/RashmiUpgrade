@@ -1,29 +1,32 @@
 """
 route.py – aiohttp web routes.
-IMPROVED: root health check now returns real JSON status instead of bare "F".
-          Added /health and /webapp endpoints for Telegram Web App support.
+IMPROVED: Flat layout routing logic with enhanced diagnostics.
 """
 import json
 import time
 import logging
+import os
 
 from aiohttp import web
 from utils import temp
 
-logger = logging.getLogger(__name__)
-routes = web.RouteTableDef()
+logger = logging.getLogger("Rashmibot.server")
+logger.setLevel(logging.INFO)
 
+routes = web.RouteTableDef()
 _start_time = time.time()
 
 
 @routes.get("/", allow_head=True)
 async def root_route_handler(request: web.Request) -> web.Response:
+    logger.info("Root endpoint hit from remote IP: %s", request.remote)
     return web.json_response({"status": "ok", "bot": temp.B_NAME or "AutoFileSearch"})
 
 
 @routes.get("/health", allow_head=True)
 async def health_handler(request: web.Request) -> web.Response:
     uptime = int(time.time() - _start_time)
+    logger.info("Health request checked. Instance Uptime calculated at: %s seconds", uptime)
     return web.json_response({
         "status":  "ok",
         "uptime_seconds": uptime,
@@ -34,28 +37,49 @@ async def health_handler(request: web.Request) -> web.Response:
 
 @routes.get("/webapp")
 async def webapp_handler(request: web.Request) -> web.Response:
-    """Serve the Telegram Web App HTML."""
+    """Serve the Telegram Web App HTML entry point."""
+    target_file = "webapp/index.html"
+    logger.info("Loading baseline WebApp viewport matrix request pointing to: %s", target_file)
     try:
-        with open("webapp/index.html", "r", encoding="utf-8") as f:
+        with open(target_file, "r", encoding="utf-8") as f:
             html = f.read()
         return web.Response(text=html, content_type="text/html")
     except FileNotFoundError:
-        return web.Response(text="<h2>Web App not found</h2>", content_type="text/html", status=404)
+        logger.error("Web view mounting crashed: Local asset file target '%s' missing.", target_file)
+        return web.Response(text="<h2>Web App Markup Document Not Found</h2>", content_type="text/html", status=404)
+
+
+# FIX: Handle app.css and app.js when requested from root or inside subpaths
+@routes.get("/{filename:app\.css|app\.js}")
+@routes.get("/webapp/{filename:app\.css|app\.js}")
+async def webapp_flat_assets_handler(request: web.Request) -> web.FileResponse:
+    """Safely intercept and map flat layout scripts and styles regardless of context route."""
+    filename = request.match_info["filename"]
+    full_path = f"webapp/{filename}"
+    
+    logger.info("Asset routing lookup intercept: Client requested file -> %s", full_path)
+    
+    if os.path.exists(full_path) and os.path.isfile(full_path):
+        return web.FileResponse(full_path)
+        
+    logger.warning("Requested flat file asset lookup failed verification boundaries: %s", full_path)
+    raise web.HTTPNotFound()
 
 
 @routes.get("/webapp/{path:.+}")
-async def webapp_static_handler(request: web.Request) -> web.FileResponse:
-    """Serve static assets for the Web App."""
+async def webapp_legacy_static_handler(request: web.Request) -> web.FileResponse:
+    """Fallback directory route handler mapping deep nested folders."""
     path = request.match_info["path"]
-    full = f"webapp/{path}"
-    import os
-    if os.path.exists(full) and os.path.isfile(full):
-        return web.FileResponse(full)
+    full_path = f"webapp/{path}"
+    
+    if os.path.exists(full_path) and os.path.isfile(full_path):
+        return web.FileResponse(full_path)
     raise web.HTTPNotFound()
 
 
 async def web_server():
-    """Create and return the aiohttp application."""
+    """Create and return the aiohttp application structure."""
+    logger.info("Initializing active standalone web application routing table configuration...")
     app = web.Application()
     app.add_routes(routes)
     return app
