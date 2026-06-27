@@ -6,7 +6,7 @@ Endpoints:
   GET /api/search?q=<query>&offset=<n>&max=<n>&type=<video|audio|document>
   GET /api/recent?max=<n>
   GET /api/stats
-  POST /api/send_file  <-- New premium bypass delivery endpoint
+  POST /api/send_file  <-- 🎯 Directly routes payloads to your existing filter module!
 """
 
 from __future__ import annotations
@@ -18,10 +18,14 @@ import ujson
 from urllib.parse import parse_qsl
 from aiohttp import web
 from plugins.subs_cmd import get_channel_subscriber_count
-
+from info import AUTH_CHANNEL
 from database.ia_filterdb import Media, get_search_results
 from database.users_chats_db import db as users_db
 from utils import get_size
+
+# ── 🔗 IMPORT YOUR NATIVE CALLBACK ROUTER ───────────────────────────────────
+# This pulls the handler directly from your group filter file
+from plugins.cmd_weappb import cb_handler
 
 logger = logging.getLogger(__name__)
 api_routes = web.RouteTableDef()
@@ -114,7 +118,8 @@ async def _fetch_and_cache_stats() -> None:
     total_users = await users_db.total_users_count()
     total_chats = await users_db.total_chat_count()
 
-    subscriber_count = 6000
+    subscriber_count = await get_channel_subscriber_count(client, AUTH_CHANNEL)prin 
+    logger.info("AUTH_CHANNEL=%s | subscriber_count=%s",AUTH_CHANNEL, subscriber_count, )
     latest_promo_text = "Comming Soon 🔜"
     logger.info(
         "WebApp stats running in DB-only mode; live channel metrics are disabled in this build."
@@ -185,15 +190,12 @@ async def api_stats(request: web.Request) -> web.Response:
         return web.json_response({"error": "Stats unavailable"}, status=500)
 
 
-# ── ✅ FIXED: POST ENDPOINT FOR DIRECT PREMIUM DISPATCH WITH SAFE OBJECT MAPPING ──
+# ── 🚀 FORWARDER ROUTE: REUSES CORE FILTERS WITH MOCKED OBJECTS ──────────────
 @api_routes.post("/api/send_file")
 async def api_send_file(request: web.Request) -> web.Response:
     try:
-        import variables
-        from database.ia_filterdb import get_file_details
-        from utils import clean_file_name, get_size
+        from pyrogram.enums import ChatType
 
-        # 1. Unpack incoming JSON payload fields
         payload = await request.json()
         raw_file_id = payload.get("file_id")
         user_id = payload.get("user_id")
@@ -203,85 +205,59 @@ async def api_send_file(request: web.Request) -> web.Response:
             user_id = _verify_and_extract_user(init_data)
 
         if not user_id:
-            logger.warning("Bypass Delivery aborted: No valid user_id resolved.")
+            logger.warning("WebApp Pipeline Forwarder bypassed: Missing a target User ID entry.")
             return web.json_response({"status": "redirect_required"}, status=200)
 
         user_id = int(user_id)
 
         bot_client = request.app.get("bot_client")
         if not bot_client:
-            logger.error("Core engine instance context 'bot_client' missing from web app server stack.")
+            logger.error("Aiohttp global store is missing the active running 'bot_client' reference context.")
             return web.json_response({"status": "redirect_required"}, status=200)
 
-        # ── Step 1: Fetch object list from database matching your model ──
-        from database.ia_filterdb import get_file_details
-        files_list = await get_file_details(raw_file_id)
-        if not files_list:
-            logger.warning("Target document hash %s returned empty from collections query.", raw_file_id)
-            return web.json_response({"error": "File not found"}, status=404)
+        # ── 🛠️ MOCK OBJECT ENGINES ───────────────────────────────────────────
+        # Simulate private query context blocks so settings['botpm'] checks don't crash
+        mock_chat = type("MockChat", (object,), {"id": user_id, "type": ChatType.PRIVATE})()
+        
+        async def mock_reply_func(*args, **kwargs):
+            return await bot_client.send_message(chat_id=user_id, text=args)
 
-        # get_file_details returns a list from cursor.to_list(length=1)
-        file_doc = files_list
+        mock_msg = type(
+            "MockMessage", 
+            (object,), 
+            {
+                "id": 1,
+                "chat": mock_chat,
+                "delete": lambda *args, **kwargs: asyncio.sleep(0), # Mutes tracking deletions from throwing errors
+                "reply": mock_reply_func
+            }
+        )()
 
-        # ── Step 2: Extract attributes directly via the uMongo wrapper mapping layer ──
-        if isinstance(file_doc, dict):
-            cached_file_id   = file_doc.get("file_id") or file_doc.get("_id")
-            original_name    = file_doc.get("file_name")
-            original_size    = file_doc.get("file_size")
-            original_caption = file_doc.get("caption")
-        else:
-            cached_file_id   = getattr(file_doc, "file_id", None)
-            original_name    = getattr(file_doc, "file_name", None)
-            original_size    = getattr(file_doc, "file_size", None)
-            original_caption = getattr(file_doc, "caption", None)
+        mock_user = type("MockUser", (object,), {"id": user_id, "first_name": "User"})()
 
-        cached_file_id = str(cached_file_id or "").strip()
+        # Build a complete mock CallbackQuery instance matching your custom layout format strings
+        mock_query = type(
+            "MockCallbackQuery",
+            (object,),
+            {
+                "id": "0",
+                "client": bot_client,
+                "from_user": mock_user,
+                "message": mock_msg,
+                "data": f"file#{raw_file_id}", # Matches your query.data.startswith("file") format exactly
+                "answer": lambda *args, **kwargs: asyncio.sleep(0), # Mutes group alert errors
+                "edit_message_reply_markup": lambda *args, **kwargs: asyncio.sleep(0)
+            }
+        )()
 
-        # Final safety catch against internal ObjectId dictionary formatting fallbacks
-        if not cached_file_id or cached_file_id.startswith("ObjectId"):
-            cached_file_id = str(raw_file_id)
+        # ── ⚡ INJECT INTO CORE HANDLER LOOP ──
+        logger.info("Forwarding mock WebApp event payload straight to native cb_handler for execution tracking -> User: %s", user_id)
+        
+        # This executes your exact file delivery logic, auto-delete tracking, custom captions, etc.
+        await cb_handler(bot_client, mock_query)
 
-        logger.info("Successfully resolved structural file_id value from uMongo object context: %s", cached_file_id)
-
-        # ── Step 3: Parse caption string values ──────────────────────────────
-        title = clean_file_name(str(original_name or cached_file_id))
-        try:
-            size = get_size(int(original_size))
-        except Exception:
-            size = ""
-
-        caption = original_caption
-        custom_caption = getattr(variables, "CUSTOM_FILE_CAPTION", "")
-        protect_content = bool(getattr(variables, "PROTECT_CONTENT", False))
-
-        if custom_caption:
-            try:
-                caption = custom_caption.format(
-                    file_name=title or "",
-                    file_size=size or "",
-                    file_caption=caption or "",
-                )
-            except Exception as fe:
-                logger.error("Caption metadata macro string compilation exception occurred: %s", fe)
-                caption = caption or title
-
-        # ── Step 4: Fire direct private chat delivery bypass ─────────────────
-        try:
-            logger.info("Executing direct background cached media delivery bypass channel for chat: %s", user_id)
-            
-            await bot_client.send_cached_media(
-                chat_id=user_id,
-                file_id=cached_file_id,
-                caption=caption or title,
-                protect_content=protect_content
-            )
-            
-            return web.json_response({"status": "direct_sent"}, status=200)
-
-        except Exception as send_err:
-            logger.warning("Direct backdrop transmission unreached for profile %s. Flipping to link window: %s", user_id, send_err)
-            return web.json_response({"status": "redirect_required"}, status=200)
+        return web.json_response({"status": "direct_sent"}, status=200)
 
     except Exception as global_exc:
-        logger.exception("Global breakdown inside WebApp file dispatch backend handler: %s", global_exc)
+        logger.exception("Global pipeline exception caught inside forwarding proxy route layout: %s", global_exc)
         return web.json_response({"status": "redirect_required"}, status=200)
