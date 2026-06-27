@@ -228,3 +228,20 @@ async def imdb_callback(bot: Client, quer_y: CallbackQuery):
         await quer_y.message.edit(caption, reply_markup=InlineKeyboardMarkup(btn), disable_web_page_preview=False)
     await quer_y.answer()
         
+from pyrogram.types import (
+        InlineKeyboardButton,
+        InlineKeyboardMarkup,
+        Message,
+        WebAppInfo,
+)
+
+# ── COMMAND 2: /wtry2 ─────────────────────────────────────────────────────────
+@Client.on_message(filters.command("wtry2") & filters.private)
+async def wtry2_cmd(client: Client, message: Message) -> None:
+    user_id = message.from_user.id if message.from_user else "Unknown"
+    logger.info("Command /wtry2 from miss.py successfully fired by user ID: %s", user_id)
+    await message.reply_text(
+        "✅ <b>wtry2 reached this file and the handler is completely alive in misc file.</b>",
+        parse_mode=enums.ParseMode.HTML,
+    )
+    
