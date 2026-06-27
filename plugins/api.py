@@ -13,7 +13,7 @@ from __future__ import annotations
 import asyncio
 import datetime
 import logging
-
+from pyrogram import Client
 from aiohttp import web
 from plugins.subs_cmd import get_channel_subscriber_count
 
@@ -102,7 +102,7 @@ async def _fetch_and_cache_stats() -> None:
     # Channel-level metrics like subscriber count and latest promo text are left as
     # safe placeholders so the API stays stable without a live Pyrogram reference.
    
-    subscriber_count = await get_channel_subscriber_count(client, AUTH_CHANNEL)
+    subscriber_count = await get_channel_subscriber_count(client or Client, AUTH_CHANNEL)
   #subscriber_count = 0
     latest_promo_text = ""
     logger.info(
