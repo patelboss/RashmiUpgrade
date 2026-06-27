@@ -1,6 +1,6 @@
 /* ── AutoFile Search Telegram Web App ─────────────────────────────────────
    Communicates with the bot's aiohttp server endpoints.
-   Falls back gracefully when running outside Telegram.
+   Passes data directly back to the active chat screen using the WebApp SDK.
 ────────────────────────────────────────────────────────────────────────── */
 
 console.log("Initializing AutoFile Mini-App Client Layer...");
@@ -315,14 +315,13 @@ function getFile() {
   const targetId = file._id || file.file_id;
   console.log(`Action requested: Fetch file execution for record payload reference token: ${targetId}`);
 
-  // FIX: Because it's an inline keyboard modal framework, switchInlineQuery closes the window natively
-  // dropping a structured command parameter right into the target active chat text row.
-  if (tg) {
-    console.log("Triggering deep-linked query execution handoff through Telegram active window shell integration layer.");
-    tg.switchInlineQuery(`get_${targetId}`);
-    closeSheet();
+  // UPDATED: Replaced switchInlineQuery with sendData to send message straight to the chat and exit instantly!
+  if (tg && tg.sendData) {
+    console.log("Passing raw extraction token directly into Telegram chat via sendData layer.");
+    tg.sendData(`get_${targetId}`);
+    tg.close();
   } else {
-    console.warn("SDK platform bridge absent. Processing local clipboard fallback loop strategy.");
+    console.warn("SDK sendData interface absent. Processing local clipboard fallback loop strategy.");
     navigator.clipboard?.writeText(`get_${targetId}`)
       .then(() => showFeedback('Query text copied!'))
       .catch(() => showFeedback('Clipboard integration fallback failure'));
