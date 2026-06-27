@@ -18,9 +18,19 @@ from database.ia_filterdb import get_file_details
 from utils import get_size, clean_file_name
 
 # Configure structured runtime logger
-logger = logging.getLogger("Rashmibot.webapp")
+logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+# Create a stream handler for stdout
+stdout_handler = logging.StreamHandler(sys.stdout)
+stdout_handler.setLevel(logging.INFO)
+
+# Set a formatter for better readability
+formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+stdout_handler.setFormatter(formatter)
+
+# Add the handler to the logger
+logger.addHandler(stdout_handler)
 
 def _webapp_url() -> str:
     """Build and validate the Web App URL served by this bot."""
