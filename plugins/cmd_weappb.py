@@ -148,27 +148,7 @@ async def _reply_webapp(client: Client, message: Message, source: str) -> None:
             logger.exception("Could not send /webapp crash message to user %s.", user_id)
 
 
-# ── EARLY PROBE ─────────────────────────────────────────────────────────────
-# This catches the commands even if a normal command filter is being weird
-# or another plugin is swallowing /commands later.
-"""
-@Client.on_message(
-    filters.private & filters.incoming & filters.text & filters.regex(r"^/(wtry|webapp)(?:\s|$)"),
-    group=-999,
-)
-async def webapp_command_probe(client: Client, message: Message) -> None:
-    text = (message.text or "").strip()
-    logger.info("Probe handler saw command-like text: %r", text)
-
-    if text.startswith("/wtry"):
-        await _reply_wtry(client, message, "probe")
-        return
-
-    if text.startswith("/webapp"):
-        await _reply_webapp(client, message, "probe")
-        return
-
-"""
+# ─
 # ── COMMAND: /wtry ───────────────────────────────────────────────────────────
 @Client.on_message(filters.command("wtry") & filters.private)
 async def wtry_cmd(client: Client, message: Message) -> None:
