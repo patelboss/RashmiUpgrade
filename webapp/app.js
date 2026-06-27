@@ -144,14 +144,6 @@ function renderCard(file) {
   return card;
 }
 
-function escHtml(s) {
-  return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
 // ── Search ────────────────────────────────────────────────────────────────
 async function doSearch(reset = true) {
   if (!state.query.trim()) return;
@@ -337,25 +329,76 @@ function closeSheet() {
   }, 280);
 }
 
-function getFile() {
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// ── ✅ UPDATED: Premium Direct Bypass Delivery Method ────────────────────────
+async function getFile() {
   const file = state.currentFile;
   if (!file) return;
 
   const targetId = file._id || file.file_id;
   console.log(`Action requested: Fetch file execution for record payload reference token: ${targetId}`);
 
-  if (tg) {
-    const botUsername = "Rashmi_v2_bot"; 
-    const deepLinkUrl = `https://t.me/${botUsername}?start=get_${targetId}`;
+  // Visual text loading state shift on button layer
+  const actionBtn = document.querySelector('.btn-primary');
+  const originalText = actionBtn ? actionBtn.innerHTML : '📥 Get File';
+  if (actionBtn) actionBtn.innerHTML = '🔄 Processing...';
+
+  try {
+    // 1. Attempt premium background delivery straight over HTTP POST
+    const response = await fetch(`${BASE_URL}/api/send_file`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        file_id: targetId,
+        init_data: tg?.initData || "" // Sends authorization payload strings to extract User IDs
+      })
+    });
+
+    const resData = await response.json();
+
+    if (response.ok && resData.status === 'direct_sent') {
+      // Direct message succeeded! Inform user cleanly inside WebApp interface context
+      if (tg?.showPopup) {
+        tg.showPopup({
+          title: 'File Sent Successfully! 📥',
+          message: 'The requested media file has been sent directly to your private messages inbox room.',
+          buttons: [{ type: 'ok' }]
+        });
+      } else {
+        showFeedback('🚀 File sent straight to your private chat!');
+      }
+      closeSheet();
+      return;
+    }
     
-    tg.openTelegramLink(deepLinkUrl);
-    tg.close();
-  } else {
-    console.warn("SDK platform bridge absent. Processing local clipboard fallback loop strategy.");
-    navigator.clipboard?.writeText(`get_${targetId}`)
-      .then(() => showFeedback('Query text copied!'))
-      .catch(() => showFeedback('Clipboard integration fallback failure'));
-    closeSheet();
+    // 2. Fallback to deep link redirection window if user has not interacted with the bot yet
+    if (tg) {
+      const botUsername = "Rashmi_v2_bot"; 
+      const deepLinkUrl = `https://t.me/${botUsername}?start=get_${targetId}`;
+      tg.openTelegramLink(deepLinkUrl);
+      tg.close();
+    } else {
+      console.warn("SDK platform bridge absent. Processing local clipboard fallback loop strategy.");
+      navigator.clipboard?.writeText(`get_${targetId}`)
+        .then(() => showFeedback('Query token copied!'))
+        .catch(() => showFeedback('Clipboard integration fallback failure'));
+      closeSheet();
+    }
+
+  } catch (err) {
+    console.error("Premium background file pipeline hit a snag. Reverting to safe deep-link:", err);
+    if (tg) {
+      tg.openTelegramLink(`https://t.me/Rashmi_v2_bot?start=get_${targetId}`);
+    }
+  } finally {
+    if (actionBtn) actionBtn.innerHTML = originalText;
   }
 }
 
