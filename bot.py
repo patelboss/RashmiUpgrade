@@ -1,6 +1,7 @@
 """
 bot.py – Main entry point for the Auto-File-Search Telegram Bot.
 IMPROVED: robust logging setup with fallback, health endpoint, cleaner structure.
+FIXED: Non-blocking aiohttp binding to clear Koyeb health checks seamlessly.
 """
 import logging
 import logging.config
@@ -57,10 +58,26 @@ class Bot(Client):
         )
 
     async def start(self) -> None:
+        # 1. Fetch startup metadata caching rules from MongoDB
         b_users, b_chats    = await db.get_banned()
         temp.BANNED_USERS   = b_users
         temp.BANNED_CHATS   = b_chats
 
+        # 2. ⚡ INITIALIZE WEB SERVER BLUEPRINT INSTANTLY
+        # Assemble the aiohttp configuration blueprint dictionary container map
+        web_blueprint = await web_server()
+        
+        # Inject the core client instance reference (self) directly into memory context
+        web_blueprint["bot_client"] = self
+        logger.info("Direct async reference injected into running context map successfully.")
+
+        # 3. EXPOSE PORT 8080 IMMEDIATELY TO SATISFY KOYEB HEALTH CHECKS
+        app_runner = web.AppRunner(web_blueprint)
+        await app_runner.setup()
+        await web.TCPSite(app_runner, "0.0.0.0", PORT).start()
+        logger.info("Aiohttp server online on port %d. Health check clearance path active.", PORT)
+
+        # 4. NOW SPIN UP RESIDENT BACKGROUND PYROGRAM TASKS SAFELY
         await super().start()
         await Media.ensure_indexes()
 
@@ -69,10 +86,6 @@ class Bot(Client):
         temp.U_NAME         = me.username
         temp.B_NAME         = me.first_name
         self.username       = "@" + me.username
-
-        app = web.AppRunner(await web_server())
-        await app.setup()
-        await web.TCPSite(app, "0.0.0.0", PORT).start()
 
         logger.info(
             "%s with Pyrogram v%s (Layer %s) started on @%s  [port %d]",
