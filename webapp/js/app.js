@@ -3,17 +3,24 @@
    Falls back gracefully when running outside Telegram.
 ────────────────────────────────────────────────────────────────────────── */
 
+console.log("Initializing AutoFile Mini-App Client Layer...");
+
 // ── Telegram Web App SDK init ─────────────────────────────────────────────
 const tg = window.Telegram?.WebApp;
 if (tg) {
+  console.log("Telegram Web App Environment detected. Syncing layout parameters...");
   tg.ready();
   tg.expand();
   tg.enableClosingConfirmation?.();
   tg.setHeaderColor?.('bg_color');
+  console.log("SDK state initialized. Client InitData:", tg.initData);
+} else {
+  console.warn("Running platform layout outside localized Telegram client context.");
 }
 
 // ── Base URL of the aiohttp server (same origin as the Web App) ───────────
 const BASE_URL = window.location.origin;
+console.log("API endpoint pointer configured to origin root: " + BASE_URL);
 
 // ── State ─────────────────────────────────────────────────────────────────
 const state = {
@@ -91,8 +98,7 @@ function debounce(fn, delay = 400) {
 }
 
 function showFeedback(text = '✓') {
-  if (tg?.showPopup) return; // use native if available
-  // simple toast fallback
+  if (tg?.showPopup) return; 
   const el = document.createElement('div');
   el.textContent = text;
   el.style.cssText = `
@@ -111,6 +117,7 @@ function showFeedback(text = '✓') {
 
 // ── API helpers ───────────────────────────────────────────────────────────
 async function apiFetch(path) {
+  console.log(`Executing remote asynchronous fetch path: ${path}`);
   const res = await fetch(BASE_URL + path);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
@@ -150,6 +157,8 @@ async function doSearch(reset = true) {
   if (!state.query.trim()) return;
   if (state.loading) return;
 
+  console.log(`Initiating file lookup execution stack. Target Query: "${state.query}" | ResetState: ${reset}`);
+
   if (reset) {
     state.offset  = 0;
     state.results = [];
@@ -171,8 +180,10 @@ async function doSearch(reset = true) {
     if (state.fileType) params.set('type', state.fileType);
 
     const data = await apiFetch(`/api/search?${params}`);
-
     const files = data.files || [];
+    
+    console.log(`Successfully fetched search results. Count parsed: ${files.length}`);
+
     state.results = state.results.concat(files);
     state.offset  = typeof data.next_offset === 'number' ? data.next_offset : state.offset + files.length;
     state.hasMore = !!data.next_offset;
@@ -190,7 +201,7 @@ async function doSearch(reset = true) {
     loadMoreBtn.classList.toggle('hidden', !state.hasMore);
     loadMoreBtn.textContent = 'Load more';
   } catch (err) {
-    console.error('Search error', err);
+    console.error('Search API execution failure context:', err);
     searchStatus.textContent = 'Search unavailable – try again';
     searchStatus.classList.remove('hidden');
     loadMoreBtn.classList.add('hidden');
@@ -205,6 +216,7 @@ const debouncedSearch = debounce(() => {
 
 // ── Recent files ──────────────────────────────────────────────────────────
 async function loadRecent() {
+  console.log("Loading recent media file arrays...");
   recentLoader.classList.remove('hidden');
   recentEmpty.classList.add('hidden');
   recentGrid.innerHTML = '';
@@ -219,7 +231,8 @@ async function loadRecent() {
     } else {
       files.forEach(f => recentGrid.appendChild(renderCard(f)));
     }
-  } catch {
+  } catch (err) {
+    console.error("Failed to load recent files array mapping:", err);
     recentEmpty.classList.remove('hidden');
   } finally {
     recentLoader.classList.add('hidden');
@@ -228,6 +241,7 @@ async function loadRecent() {
 
 // ── Stats ─────────────────────────────────────────────────────────────────
 async function loadStats() {
+  console.log("Requesting dynamic instance stats from server metrics tracking endpoints...");
   try {
     const [health, stats] = await Promise.all([
       apiFetch('/health'),
@@ -242,7 +256,8 @@ async function loadStats() {
     $('#infoBotName').textContent     = health.bot      || '–';
     $('#infoBotUsername').textContent  = health.username ? '@' + health.username : '–';
     $('#infoUptime').textContent      = health.uptime_seconds ? fmtUptime(health.uptime_seconds) : '–';
-  } catch {
+  } catch (err) {
+    console.error("Metric dashboard loading failure logged:", err);
     ['statFiles', 'statUsers', 'statChats', 'statFilters'].forEach(id => {
       $('#' + id).textContent = '–';
     });
@@ -253,6 +268,7 @@ async function loadStats() {
 function openSheet(file) {
   state.currentFile = file;
   const type = (file.file_type || '').toLowerCase().replace('messages.', '');
+  console.log("Opening bottom interaction sheet context for target file database object ID:", file._id || file.file_id);
 
   sheetContent.innerHTML = `
     <div class="sheet-file-name">${typeEmoji(type)} ${escHtml(file.file_name || 'Untitled')}</div>
@@ -296,16 +312,20 @@ function getFile() {
   const file = state.currentFile;
   if (!file) return;
 
-  // Send file_id back to the bot via Telegram Web App sendData
-  if (tg?.sendData) {
-    tg.sendData(JSON.stringify({ action: 'get_file', file_id: file._id || file.file_id }));
+  const targetId = file._id || file.file_id;
+  console.log(`Action requested: Fetch file execution for record payload reference token: ${targetId}`);
+
+  // FIX: Because it's an inline keyboard modal framework, switchInlineQuery closes the window natively
+  // dropping a structured command parameter right into the target active chat text row.
+  if (tg) {
+    console.log("Triggering deep-linked query execution handoff through Telegram active window shell integration layer.");
+    tg.switchInlineQuery(`get_${targetId}`);
     closeSheet();
-    showFeedback('Sending to bot…');
   } else {
-    // Fallback: copy file ID to clipboard
-    navigator.clipboard?.writeText(file._id || file.file_id || '')
-      .then(() => showFeedback('File ID copied!'))
-      .catch(() => showFeedback('Use bot to get file'));
+    console.warn("SDK platform bridge absent. Processing local clipboard fallback loop strategy.");
+    navigator.clipboard?.writeText(`get_${targetId}`)
+      .then(() => showFeedback('Query text copied!'))
+      .catch(() => showFeedback('Clipboard integration fallback failure'));
     closeSheet();
   }
 }
@@ -380,18 +400,16 @@ clearBtn.addEventListener('click', () => {
 });
 
 loadMoreBtn.addEventListener('click', () => doSearch(false));
-
-// Overlay click closes sheet
 sheetOverlay.addEventListener('click', closeSheet);
 
 // ── Init ──────────────────────────────────────────────────────────────────
 clearBtn.style.display = 'none';
 idleState.classList.remove('hidden');
 
-// If opened via Telegram startapp with a query param, auto-search
 const initData = tg?.initDataUnsafe;
 if (initData?.start_param) {
   const q = decodeURIComponent(initData.start_param).replace(/_/g, ' ');
+  console.log(`Launch runtime contextual starting search parameter parameter hooked: "${q}"`);
   if (q) {
     searchInput.value = q;
     state.query = q;
