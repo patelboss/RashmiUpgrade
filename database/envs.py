@@ -73,7 +73,7 @@ def fetch_config(config_name):
         config = col.find_one({"config_name": config_name})
         if config:
             
-            logger.info(f"Configuration {config_name} & config: {config}  fetched successfully.")
+            #logger.info(f"Configuration {config_name} & config: {config}  fetched successfully.")
             return config
         else:
             logger.warning(f"Configuration {config_name} & config: {config} not found in database. Using default values.")
