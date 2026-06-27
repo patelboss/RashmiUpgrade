@@ -13,13 +13,13 @@
 <body>
   <nav class="nav">
     <div class="nav-logo">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <div class="channel-logo-mini">🍿</div>
       AutoFile
     </div>
     <div class="nav-tabs" id="navTabs">
       <button class="tab active" data-tab="search">Search</button>
       <button class="tab" data-tab="recent">Recent</button>
-      <button class="tab" data-tab="stats">Stats</button>
+      <button class="tab" data-tab="stats">About</button>
     </div>
     <button class="theme-toggle-btn" id="themeToggleBtn" title="Toggle Theme" aria-label="Toggle Theme">
       <svg class="sun-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
@@ -93,41 +93,35 @@
 
   <section class="tab-panel" id="tab-stats">
     <div class="section-header">
-      <h2>Bot Stats</h2>
+      <h2>About Service</h2>
     </div>
 
     <div class="stats-grid">
       <div class="stat-card">
-        <div class="stat-icon">🗂️</div>
+        <div class="stat-icon">📊</div>
         <div class="stat-value" id="statFiles">–</div>
         <div class="stat-label">Total Files</div>
       </div>
       <div class="stat-card">
-        <div class="stat-icon">👥</div>
-        <div class="stat-value" id="statUsers">–</div>
-        <div class="stat-label">Users</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon">💬</div>
-        <div class="stat-value" id="statChats">–</div>
-        <div class="stat-label">Groups</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon">⚡</div>
-        <div class="stat-value" id="statFilters">–</div>
-        <div class="stat-label">Filters</div>
+        <div class="stat-icon">📢</div>
+        <div class="stat-value" id="statSubs">–</div>
+        <div class="stat-label">Subscribers</div>
       </div>
     </div>
 
     <div class="info-card">
-      <div class="info-row"><span class="info-key">Bot</span><span class="info-val" id="infoBotName">–</span></div>
-      <div class="info-row"><span class="info-key">Username</span><span class="info-val" id="infoBotUsername">–</span></div>
-      <div class="info-row"><span class="info-key">Uptime</span><span class="info-val" id="infoUptime">–</span></div>
-      <div class="info-row"><span class="info-key">Status</span><span class="info-val status-ok">● Online</span></div>
+      <div class="info-row"><span class="info-key">Current Bot</span><span class="info-val" id="infoBotName">–</span></div>
+      <div class="info-row"><span class="info-key">Bot Admin</span><span class="info-val" id="infoBotAdmin">–</span></div>
+      <div class="info-row"><span class="info-key">Status</span><span class="info-val status-ok">● Active</span></div>
     </div>
 
-    <div class="about-card">
-      <p class="about-text">AutoFile Search Bot – smart Telegram media indexer.</p>
+    <div class="promo-section-header">🎯 Latest Promotion</div>
+    <div class="ad-panel-card" id="promoAdPanel">
+      <div class="ad-loading">Loading channel campaign broadcast...</div>
+    </div>
+
+    <div class="about-card" style="margin-top: 20px;">
+      <p class="about-text">AutoFile Search Engine Hub.</p>
       <p class="about-text muted">Powered by Pyrogram · MongoDB · Telegram Web Apps</p>
     </div>
   </section>
