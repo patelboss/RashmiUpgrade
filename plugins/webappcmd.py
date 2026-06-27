@@ -8,7 +8,8 @@ import os
 import os
 from pyrogram import Client, filters, enums
 from pyrogram.errors.exceptions.bad_request_400 import UserNotParticipant, MediaEmpty, PhotoInvalidDimensions, WebpageMediaEmpty
-
+import logging
+import sys
 from pyrogram import Client, filters, enums
 from pyrogram.types import (
     InlineKeyboardButton,
@@ -42,6 +43,19 @@ def _webapp_url() -> str:
     if base:
         return f"{base}/webapp"
     return ""
+@Client.on_message(filters.command('wtry'))
+async def wtry_cmd(client: Client, message: Message) -> None:
+    # FIX: Safely resolve the user ID first to prevent NameError
+    user_id = message.from_user.id if message.from_user else "Unknown"
+    logger.info("Command /wtry triggered by user ID: %s", user_id)
+    
+    await message.reply_text(
+        "<b>Web App URL is not configured.</b>\n"
+        "Set the <code>BASE_URL</code> environment variable to your server URL.",
+        parse_mode=enums.ParseMode.HTML,
+    )
+    # FIX: Aligned perfectly to match function block depth level
+    return
 
 
 @Client.on_message(filters.command('webapp'))
