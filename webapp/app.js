@@ -73,7 +73,6 @@ function fmtUptime(s) {
   return parts.join(' ');
 }
 
-// User-defined personalization preferences for immediate reference mapping
 function typeEmoji(type) {
   switch (type) {
     case 'video':    return '🎬';
@@ -241,43 +240,55 @@ async function loadRecent() {
 }
 
 // ── About / Stats View ────────────────────────────────────────────────────
-async function loadStats() {
-  console.log("Requesting dynamic instance stats from server metrics tracking endpoints...");
+async function loadStats(forceRefresh = false) {
+  console.log(`Requesting dynamic instance stats. Forced Refresh: ${forceRefresh}`);
+  
+  const refreshBtn = $('#refreshStatsBtn');
+  if (forceRefresh && refreshBtn) {
+    refreshBtn.style.animation = "spin 1s linear infinite";
+  }
+
   try {
     const [health, stats] = await Promise.all([
       apiFetch('/health'),
-      apiFetch('/api/stats'),
+      apiFetch(`/api/stats${forceRefresh ? '?refresh=true' : ''}`),
     ]);
 
     // ── Stat cards (total_files + subscriber_count) ───────────────────────
     $('#statFiles').textContent = (stats.total_files ?? '–').toLocaleString();
     $('#statSubs').textContent  = (stats.subscriber_count ?? '–').toLocaleString();
 
-    // ── Info rows (bot name / admin / status already in HTML) ────────────
+    // ── Info rows (bot name / admin / storage options) ────────────────────
     $('#infoBotName').textContent  = health.bot || '–';
-    
-    // Fallback assignment to specify admin identification strings
     $('#infoBotAdmin').textContent = health.username ? '@' + health.username : '–';
+    
+    // Bind Storage Parameters Directly From JSON Object Keys
+    $('#infoUsedStorage').textContent = stats.used_storage || '–';
+    $('#infoFreeStorage').textContent = stats.free_storage || '–';
 
     // ── Latest promo text → #promoAdPanel (Parses HTML formatting nodes) ──
     const promoPanel = $('#promoAdPanel');
     if (promoPanel) {
       const promoText = (stats.latest_promo_text || '').trim();
       if (promoText) {
-        promoPanel.innerHTML = promoText; // Changed to innerHTML to render rich text/links flawlessly
+        promoPanel.innerHTML = promoText; // innerHTML allows rich formatting links
       } else {
         promoPanel.innerHTML = '<div class="ad-loading">No promotions at the moment.</div>';
       }
     }
   } catch (err) {
     console.error("Metric dashboard loading failure logged:", err);
-    ['statFiles', 'statSubs'].forEach(id => {
+    ['statFiles', 'statSubs', 'infoUsedStorage', 'infoFreeStorage'].forEach(id => {
       const el = $('#' + id);
       if (el) el.textContent = '–';
     });
     const promoPanel = $('#promoAdPanel');
     if (promoPanel) {
       promoPanel.innerHTML = '<div class="ad-loading">Could not load promotion.</div>';
+    }
+  } finally {
+    if (refreshBtn) {
+      refreshBtn.style.animation = "";
     }
   }
 }
@@ -373,7 +384,7 @@ document.querySelectorAll('.tab').forEach(btn => {
     $('#tab-' + tab)?.classList.add('active');
 
     if (tab === 'recent') loadRecent();
-    if (tab === 'stats')  loadStats();
+    if (tab === 'stats')  loadStats(false); // Serve cached version by default
   });
 });
 
@@ -419,6 +430,11 @@ clearBtn.addEventListener('click', () => {
 
 loadMoreBtn.addEventListener('click', () => doSearch(false));
 sheetOverlay.addEventListener('click', closeSheet);
+
+// ── Manual Refresh Data Trigger ──────────────────────────────────────────
+document.getElementById('refreshStatsBtn')?.addEventListener('click', () => {
+  loadStats(true); // Forces backend cache flush
+});
 
 // ── Init ──────────────────────────────────────────────────────────────────
 clearBtn.style.display = 'none';
