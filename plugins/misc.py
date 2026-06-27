@@ -228,11 +228,6 @@ async def imdb_callback(bot: Client, quer_y: CallbackQuery):
         await quer_y.message.edit(caption, reply_markup=InlineKeyboardMarkup(btn), disable_web_page_preview=False)
     await quer_y.answer()
         
-
-        """
-webapp_cmd.py – Registers /webapp command that sends the Telegram Web App button.
-Also handles inline deep-linking queries when data is passed from the Web App interface.
-"""
 import logging
 import json
 import os
@@ -262,8 +257,8 @@ def _webapp_url() -> str:
     return ""
 
 
-@Client.on_message(filters.command("webapp"))
-async def webapp_cmd(client: Client, message: Message) -> None:
+@Client.on_message(filters.command("web_app"))
+async def webapp_cmd1(client: Client, message: Message) -> None:
     """Send an inline button that opens the Telegram Web App."""
     user_id = message.from_user.id if message.from_user else "Unknown"
     logger.info("Command /webapp triggered by user ID: %s", user_id)
@@ -292,10 +287,8 @@ async def webapp_cmd(client: Client, message: Message) -> None:
 
 
 @Client.on_message(filters.text & filters.incoming, group=100)
-async def webapp_inline_handler(client: Client, message: Message) -> None:
-    """
-    Handles deep-linked extraction tokens passed back by the interface layout.
-    """
+async def webapp_inline_handler1(client: Client, message: Message) -> None:
+    
     if not message.text or not message.text.startswith("get_"):
         return
 
