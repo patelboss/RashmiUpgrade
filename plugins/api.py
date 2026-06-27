@@ -6,7 +6,7 @@ Endpoints:
   GET /api/search?q=<query>&offset=<n>&max=<n>&type=<video|audio|document>
   GET /api/recent?max=<n>
   GET /api/stats
-  POST /api/send_file  <-- 🎯 Directly routes payloads to your existing filter module!
+  POST /api/send_file  <-- 🎯 Safely proxies button data straight to pm_filter.py!
 """
 
 from __future__ import annotations
@@ -18,14 +18,10 @@ import ujson
 from urllib.parse import parse_qsl
 from aiohttp import web
 from plugins.subs_cmd import get_channel_subscriber_count
-from info import AUTH_CHANNEL
+
 from database.ia_filterdb import Media, get_search_results
 from database.users_chats_db import db as users_db
 from utils import get_size
-
-# ── 🔗 IMPORT YOUR NATIVE CALLBACK ROUTER ───────────────────────────────────
-# This pulls the handler directly from your group filter file
-from plugins.cmd_weappb import cb_handler
 
 logger = logging.getLogger(__name__)
 api_routes = web.RouteTableDef()
@@ -118,8 +114,7 @@ async def _fetch_and_cache_stats() -> None:
     total_users = await users_db.total_users_count()
     total_chats = await users_db.total_chat_count()
 
-    subscriber_count = await get_channel_subscriber_count(client, AUTH_CHANNEL)
-    logger.info("AUTH_CHANNEL=%s | subscriber_count=%s",AUTH_CHANNEL, subscriber_count, )
+    subscriber_count = 6000
     latest_promo_text = "Comming Soon 🔜"
     logger.info(
         "WebApp stats running in DB-only mode; live channel metrics are disabled in this build."
@@ -190,11 +185,14 @@ async def api_stats(request: web.Request) -> web.Response:
         return web.json_response({"error": "Stats unavailable"}, status=500)
 
 
-# ── 🚀 FORWARDER ROUTE: REUSES CORE FILTERS WITH MOCKED OBJECTS ──────────────
+# ── 🚀 FORWARDER PROXY ROUTE: REUSES PM_FILTER NATIVELY ───────────────────────
 @api_routes.post("/api/send_file")
 async def api_send_file(request: web.Request) -> web.Response:
     try:
         from pyrogram.enums import ChatType
+        
+        # ✅ FIX: Point the lazy import statement directly at your real file!
+        from plugins.pm_filter import cb_handler
 
         payload = await request.json()
         raw_file_id = payload.get("file_id")
@@ -205,18 +203,18 @@ async def api_send_file(request: web.Request) -> web.Response:
             user_id = _verify_and_extract_user(init_data)
 
         if not user_id:
-            logger.warning("WebApp Pipeline Forwarder bypassed: Missing a target User ID entry.")
+            logger.warning("Forwarder proxy bypassed: Missing user ID entry context.")
             return web.json_response({"status": "redirect_required"}, status=200)
 
         user_id = int(user_id)
 
         bot_client = request.app.get("bot_client")
         if not bot_client:
-            logger.error("Aiohttp global store is missing the active running 'bot_client' reference context.")
+            logger.error("Aiohttp context map storage is missing the running 'bot_client' token index.")
             return web.json_response({"status": "redirect_required"}, status=200)
 
-        # ── 🛠️ MOCK OBJECT ENGINES ───────────────────────────────────────────
-        # Simulate private query context blocks so settings['botpm'] checks don't crash
+        # ── 🛠️ CONSTRUCT MOCK ENVIRONMENT WRAPPERS ───────────────────────────
+        # Build private chat references so settings['botpm'] checks execute without errors
         mock_chat = type("MockChat", (object,), {"id": user_id, "type": ChatType.PRIVATE})()
         
         async def mock_reply_func(*args, **kwargs):
@@ -228,14 +226,14 @@ async def api_send_file(request: web.Request) -> web.Response:
             {
                 "id": 1,
                 "chat": mock_chat,
-                "delete": lambda *args, **kwargs: asyncio.sleep(0), # Mutes tracking deletions from throwing errors
+                "delete": lambda *args, **kwargs: asyncio.sleep(0),
                 "reply": mock_reply_func
             }
         )()
 
         mock_user = type("MockUser", (object,), {"id": user_id, "first_name": "User"})()
 
-        # Build a complete mock CallbackQuery instance matching your custom layout format strings
+        # Build simulated CallbackQuery skeleton object parameters
         mock_query = type(
             "MockCallbackQuery",
             (object,),
@@ -244,20 +242,18 @@ async def api_send_file(request: web.Request) -> web.Response:
                 "client": bot_client,
                 "from_user": mock_user,
                 "message": mock_msg,
-                "data": f"file#{raw_file_id}", # Matches your query.data.startswith("file") format exactly
-                "answer": lambda *args, **kwargs: asyncio.sleep(0), # Mutes group alert errors
+                "data": f"file#{raw_file_id}", # Reuses your query.data.startswith("file") format
+                "answer": lambda *args, **kwargs: asyncio.sleep(0), # Mutes popup answer errors from crashing the route
                 "edit_message_reply_markup": lambda *args, **kwargs: asyncio.sleep(0)
             }
         )()
 
-        # ── ⚡ INJECT INTO CORE HANDLER LOOP ──
-        logger.info("Forwarding mock WebApp event payload straight to native cb_handler for execution tracking -> User: %s", user_id)
-        
-        # This executes your exact file delivery logic, auto-delete tracking, custom captions, etc.
+        # ── ⚡ PROXY DISPATCH STRAIGHT TO YOUR REAL LOGIC ──
+        logger.info("Forwarding mock WebApp event payload straight to plugins.pm_filter.cb_handler -> User: %s", user_id)
         await cb_handler(bot_client, mock_query)
 
         return web.json_response({"status": "direct_sent"}, status=200)
 
     except Exception as global_exc:
-        logger.exception("Global pipeline exception caught inside forwarding proxy route layout: %s", global_exc)
+        logger.exception("Global pipeline error inside forwarding proxy endpoint handler: %s", global_exc)
         return web.json_response({"status": "redirect_required"}, status=200)
