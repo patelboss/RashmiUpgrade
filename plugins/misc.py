@@ -228,16 +228,3 @@ async def imdb_callback(bot: Client, quer_y: CallbackQuery):
         await quer_y.message.edit(caption, reply_markup=InlineKeyboardMarkup(btn), disable_web_page_preview=False)
     await quer_y.answer()
         
-
-@Client.on_message(filters.command("wtry2m") & filters.private)
-async def wtry2m_cmd(client: Client, message: Message) -> None:
-    # 1. Properly resolve the user_id from the incoming message object
-    user_id = message.from_user.id if message.from_user else "Unknown"
-    logger.info("Command /wtry2 triggered by user ID: %s", user_id)
-    
-    # 2. message is now an accessible parameter, allowing the reply to send
-    await message.reply_text(
-        "✅ wtry2m reached this file and the handler is alive.",
-        parse_mode=enums.ParseMode.HTML,
-    )
-    
