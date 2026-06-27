@@ -253,8 +253,58 @@ async def _handle_subs_request(client: Client, message: Message, source: str) ->
             )
         except Exception:
             pass
+async def get_channel_subscriber_count(client: Client, target: str | int) -> int:
+    """
+    Return the subscriber/member count for a channel or group.
 
+    Returns:
+        int: Member count if available.
+        0: If it cannot be determined.
+    """
+    logger.info("Fetching subscriber count for target=%r", target)
 
+    try:
+        chat = await client.get_chat(target)
+
+        count = getattr(chat, "members_count", None)
+        if count is not None:
+            logger.info(
+                "Subscriber count obtained from get_chat(): %s",
+                count,
+            )
+            return int(count)
+
+        logger.info("members_count not present in get_chat() response.")
+
+    except Exception as exc:
+        logger.warning(
+            "get_chat() failed while fetching subscriber count for %r: %s",
+            target,
+            exc,
+            exc_info=True,
+        )
+
+    try:
+        if hasattr(client, "get_chat_members_count"):
+            count = await client.get_chat_members_count(target)
+            logger.info(
+                "Subscriber count obtained from get_chat_members_count(): %s",
+                count,
+            )
+            return int(count)
+
+    except Exception as exc:
+        logger.warning(
+            "get_chat_members_count() failed for %r: %s",
+            target,
+            exc,
+            exc_info=True,
+        )
+
+    logger.warning("Unable to determine subscriber count for %r", target)
+    return 0
+
+"""
 # This probe runs very early and should catch /subs even if another handler is being noisy.
 @Client.on_message(
     filters.private & filters.incoming & filters.text & filters.regex(r"^/subs(?:@\w+)?(?:\s|$)"),
@@ -263,7 +313,7 @@ async def _handle_subs_request(client: Client, message: Message, source: str) ->
 async def subs_probe(client: Client, message: Message) -> None:
     logger.info("Early /subs probe matched text=%r", message.text)
     await _handle_subs_request(client, message, source="probe")
-
+"""
 
 @Client.on_message(filters.command("subs") & filters.private)
 async def subs_cmd(client: Client, message: Message) -> None:
