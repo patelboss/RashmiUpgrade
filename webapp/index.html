@@ -94,6 +94,10 @@
   <section class="tab-panel" id="tab-stats">
     <div class="section-header">
       <h2>About Service</h2>
+      <!-- ✅ ADDED: Cache Refresh Action Button -->
+      <button class="theme-toggle-btn" id="refreshStatsBtn" title="Refresh Service Data" aria-label="Refresh Data" style="margin-left: auto;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+      </button>
     </div>
 
     <div class="stats-grid">
@@ -112,6 +116,9 @@
     <div class="info-card">
       <div class="info-row"><span class="info-key">Current Bot</span><span class="info-val" id="infoBotName">–</span></div>
       <div class="info-row"><span class="info-key">Bot Admin</span><span class="info-val" id="infoBotAdmin">–</span></div>
+      <!-- ✅ ADDED: Storage target row mappings -->
+      <div class="info-row"><span class="info-key">Used Storage</span><span class="info-val" id="infoUsedStorage">–</span></div>
+      <div class="info-row"><span class="info-key">Free Storage</span><span class="info-val" id="infoFreeStorage">–</span></div>
       <div class="info-row"><span class="info-key">Status</span><span class="info-val status-ok">● Active</span></div>
     </div>
 
