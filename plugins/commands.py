@@ -890,3 +890,169 @@ async def donation_callback(client, callback_query):
         reply_markup=reply_markup
     )
 
+
+
+import re
+import uuid
+from pyrogram import Client, filters
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from database.ia_filterdb import Media
+from utils import get_size
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Temporary RAM cache to hold database queries pending admin confirmation
+PURGE_CACHE = {}
+
+def parse_size_filter(size_str):
+    """Parses formats like >500MB or <1.5GB into operators and bytes."""
+    match = re.match(r"([<>])\s*([\d\.]+)\s*([KMG]?B)", size_str.upper())
+    if not match:
+        return None, None
+    op, val, unit = match.groups()
+    val = float(val)
+    multiplier = 1
+    if unit == 'KB': multiplier = 1024
+    elif unit == 'MB': multiplier = 1024**2
+    elif unit == 'GB': multiplier = 1024**3
+    return op, int(val * multiplier)
+
+@Client.on_message(filters.command('scrub') & filters.user(ADMINS))
+async def scrub_database(client, message):
+    """
+    Usage: /scrub [pattern] [size_filter]
+    Examples: 
+    /scrub *avengers* /scrub avatar* >1GB
+    /scrub *movie <500MB
+    """
+    if len(message.command) < 2:
+        return await message.reply_text(
+            "<b>⚠️ Invalid Format.</b>\n\n"
+            "<b>Usage:</b> <code>/scrub [pattern] [size]</code>\n"
+            "<b>Example:</b> <code>/scrub *spider-man* >1GB</code>\n"
+            "<b>Example:</b> <code>/scrub batman* &lt;500MB</code>"
+        )
+
+    # 1. Parse the command arguments
+    args = message.text.split(maxsplit=1)
+    
+    # Extract size filter if present (e.g., >100MB or <2GB)
+    size_op, size_bytes = None, None
+    size_match = re.search(r"([<>]\s*[\d\.]+\s*[KMG]?B)", args, re.IGNORECASE)
+    
+    if size_match:
+        size_str = size_match.group(1)
+        size_op, size_bytes = parse_size_filter(size_str)
+        # Remove the size filter from the pattern string
+        args = args.replace(size_str, "").strip()
+
+    pattern = args
+
+    # 2. Convert the * wildcard into a MongoDB-compatible regex pattern
+    # Escape special characters first, then replace the escaped \* with .*
+    safe_pattern = re.escape(pattern).replace(r"\*", ".*")
+    regex_pattern = f"^{safe_pattern}$"
+
+    # 3. Build the MongoDB Query Dictionary
+    db_query = {'file_name': {'$regex': regex_pattern, '$options': 'i'}}
+    
+    if size_op and size_bytes:
+        mongo_op = '$gt' if size_op == '>' else '$lt'
+        db_query['file_size'] = {mongo_op: size_bytes}
+
+    msg = await message.reply_text("<b>🔍 Scanning database... please wait.</b>")
+
+    try:
+        # 4. Use Aggregation to get stats without crashing RAM (OOM safe!)
+        pipeline = [
+            {"$match": db_query},
+            {"$group": {
+                "_id": None,
+                "total_count": {"$sum": 1},
+                "max_size": {"$max": "$file_size"},
+                "min_size": {"$min": "$file_size"}
+            }}
+        ]
+        
+        stats_cursor = Media.collection.aggregate(pipeline)
+        stats = await stats_cursor.to_list(length=1)
+
+        if not stats:
+            return await msg.edit_text(f"<b>❌ No files found matching:</b> <code>{pattern}</code>")
+
+        stats = stats
+        total_count = stats.get("total_count", 0)
+        max_size = get_size(stats.get("max_size", 0))
+        min_size = get_size(stats.get("min_size", 0))
+
+        # 5. Fetch up to 5 sample file names for the admin to review
+        samples_cursor = Media.collection.find(db_query).limit(5)
+        sample_docs = await samples_cursor.to_list(length=5)
+        sample_names = "\n".join([f" ├ <code>{doc['file_name']}</code>" for doc in sample_docs])
+
+        # 6. Generate a unique cache key and store the query
+        query_id = str(uuid.uuid4())[:8]
+        PURGE_CACHE[query_id] = db_query
+
+        # 7. Build the confirmation message
+        text = (
+            f"<b>⚠️ DATABASE PURGE WARNING</b>\n\n"
+            f"<b>Pattern:</b> <code>{pattern}</code>\n"
+            f"<b>Size Filter:</b> <code>{'None' if not size_op else f'{size_op} {get_size(size_bytes)}'}</code>\n\n"
+            f"<b>📊 SCAN RESULTS:</b>\n"
+            f" ├ <b>Total Files:</b> {total_count}\n"
+            f" ├ <b>Min Size:</b> {min_size}\n"
+            f" └ <b>Max Size:</b> {max_size}\n\n"
+            f"<b>📂 SAMPLES:</b>\n{sample_names}\n\n"
+            f"<b>Are you absolutely sure you want to delete these {total_count} files? This cannot be undone.</b>"
+        )
+
+        buttons = [
+            [
+                InlineKeyboardButton("🗑️ YES, DELETE ALL", callback_data=f"purge_yes_{query_id}"),
+                InlineKeyboardButton("❌ CANCEL", callback_data=f"purge_no_{query_id}")
+            ]
+        ]
+
+        await msg.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+
+    except Exception as e:
+        logger.exception("Error during database scrub scan.")
+        await msg.edit_text(f"<b>❌ An error occurred during the scan:</b> {e}")
+
+
+@Client.on_callback_query(filters.regex(r"^purge_(yes|no)_"))
+async def handle_purge_confirmation(client, query):
+    action, query_id = query.data.split("_"), query.data.split("_")
+
+    # Ensure only authorized admins can click this button
+    if str(query.from_user.id) not in ADMINS:
+        return await query.answer("This button is strictly for admins.", show_alert=True)
+
+    if action == "no":
+        # Clean up cache and cancel
+        PURGE_CACHE.pop(query_id, None)
+        return await query.message.edit_text("<b>✅ Purge operation cancelled. No files were deleted.</b>")
+
+    if action == "yes":
+        db_query = PURGE_CACHE.pop(query_id, None)
+        
+        if not db_query:
+            return await query.answer("This purge request has expired or was already executed.", show_alert=True)
+
+        await query.answer("Deleting files... this might take a moment.", show_alert=True)
+        
+        try:
+            # Execute the mass deletion natively on the MongoDB engine
+            result = await Media.collection.delete_many(db_query)
+            deleted_count = result.deleted_count
+            
+            await query.message.edit_text(
+                f"<b>🗑️ PURGE COMPLETE</b>\n\n"
+                f"<b>Successfully deleted:</b> {deleted_count} files from the database."
+            )
+            
+        except Exception as e:
+            logger.exception("Error executing mass deletion.")
+            await query.message.edit_text(f"<b>❌ An error occurred while deleting files:</b> {e}")
