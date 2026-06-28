@@ -847,7 +847,19 @@ async def auto_filter(client, msg, spoll=False):
         if re.findall("((^\/|^,|^!|^\.|^[\U0001F600-\U000E007F]).*)", message.text):
             return
         if len(message.text) < 100:
-            search = " ".join(message.text.replace("\n", " ").replace("\r", " ").split())
+                        # 1. Flatten hidden carriage returns and vertical line breaks cleanly
+            flattened = message.text.replace("\n", " ").replace("\r", " ")
+            logger.info(f"Processed query in auto_filter: {flattened}")
+
+            
+            # 2. Extract only English characters, numbers, and white spaces
+            alphanumeric_only = re.sub(r'[^a-zA-Z0-9\s]', ' ', flattened)
+            logger.info(f"Processed query in auto_filter: {alphanumeric_only}")
+            # 3. Compress double spaces left behind by stripped special characters
+            search = " ".join(alphanumeric_only.split())
+            logger.info(f"Processed query in auto_filter: {search}")
+            
+           # search = " ".join(message.text.replace("\n", " ").replace("\r", " ").split())
             files, offset, total_results = await get_search_results(search.lower(), offset=0, filter=True)
             #search = message.text
             #files, offset, total_results = await get_search_results(search.lower(), offset=0, filter=True)
@@ -995,18 +1007,24 @@ async def advantage_spell_chok(client, msg):
    #     "", msg.text, flags=re.IGNORECASE
    # ).strip()
     # 1. Strip structural keywords cleanly using regex rules
-    raw_query = re.sub(
+        # 1. Clean out the bot keyword commands using your existing filter layout
+    cleaned_text = re.sub(
         r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|movie(s)?|new|latest|br((o|u)h?)*|^h(e|a)?(l)*(o)*|mal(ayalam)?|t(h)?amil|file|that|find|und(o)*|kit(t(i|y)?)?o(w)?|thar(u)?(o)*w?|kittum(o)*|aya(k)*(um(o)*)?|full\smovie|any(one)|with\ssubtitle(s)?)",
         "", msg.text, flags=re.IGNORECASE
     ).strip()
+    logger.info(f"Processed query in adv spell check: {cleaned_text}")
 
-    # 2. CRITICAL SAFETY FIX: Flatten carriage returns and convert multi-spaces down to single spaces
-    query = " ".join(raw_query.replace("\n", " ").replace("\r", " ").split())
+    # 2. ✅ THE FIX: Drop all lines breaks, turn symbols into spaces, and compress double spaces
+    flattened = cleaned_text.replace("\n", " ").replace("\r", " ")
+    logger.info(f"Processed query in adv spell check: {flattened}")
+    alphanumeric_only = re.sub(r'[^a-zA-Z0-9\s]', ' ', flattened)
+    logger.info(f"Processed query in adv spell check: {alphanumeric_only}")
+    query = " ".join(alphanumeric_only.split())
 
     if not query:
         return
 
-#    logger.info(f"Processed query: {query}")
+    logger.info(f"Processed query in adv spell check: {query}")
 
     try:
         # Fetch movie suggestions
