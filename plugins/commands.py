@@ -800,35 +800,65 @@ async def save_template(client, message: Message):
 # /scrub  — bulk DB purge with pattern matching (admin)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _parse_size_filter(size_str: str):
-    match = re.match(r"([<>])\s*([\d\.]+)\s*([KMG]?B)", size_str.upper())
-    if not match:
-        return None, None
-    op, val, unit = match.groups()
-    val = float(val)
-    mult = {"KB": 1024, "MB": 1024**2, "GB": 1024**3}.get(unit, 1)
-    return op, int(val * mult)
-
-
 @Client.on_message(filters.command("scrub") & filters.user(ADMINS))
 async def scrub_database(client, message: Message):
     lang = await db.get_user_lang(message.from_user.id)
     if len(message.command) < 2:
         return await message.reply_text(get(lang, "SCRUB_USAGE"))
 
-    args     = message.text.split(maxsplit=1)[1]
-    size_op, size_bytes = None, None
-    size_match = re.search(r"([<>]\s*[\d\.]+\s*[KMG]?B)", args, re.IGNORECASE)
-    if size_match:
-        size_str  = size_match.group(1)
-        size_op, size_bytes = _parse_size_filter(size_str)
-        args      = args.replace(size_str, "").strip()
+    raw_args = message.text.split(maxsplit=1)[1].strip()
 
-    pattern     = args
-    safe_pat    = re.escape(pattern).replace(r"\*", ".*")
-    db_query    = {"file_name": {"$regex": f"^{safe_pat}$", "$options": "i"}}
-    if size_op and size_bytes:
-        db_query["file_size"] = {"$gt" if size_op == ">" else "$lt": size_bytes}
+    # 1. Parse 'name:' parameter
+    pattern = None
+    name_match = re.search(r"name:\s*(.*?)(?=\s*size:|$)", raw_args, re.IGNORECASE | re.DOTALL)
+    if name_match:
+        pattern = name_match.group(1).strip()
+    
+    # 2. Parse 'size:' parameter
+    size_args = None
+    size_match = re.search(r"size:\s*(.*)", raw_args, re.IGNORECASE | re.DOTALL)
+    if size_match:
+        size_args = size_match.group(1).strip()
+
+    # Fallback if the user didn't use parameters explicitly, treat the whole string as the name
+    if not name_match and not size_match:
+        pattern = raw_args
+
+    db_query = {}
+
+    # 3. Build File Name Query
+    if pattern:
+        # Flatten special characters for matching if your database normalizes them, 
+        # or use directly with wildcards converted safely.
+        clean_pattern = re.sub(r'[^a-zA-Z0-9\s\*]', ' ', pattern)
+        safe_pat = re.escape(clean_pattern).replace(r"\*", ".*")
+        # Removing strict ^ and $ anchors so it behaves like a flexible search string
+        db_query["file_name"] = {"$regex": f"{safe_pat}", "$options": "i"}
+
+    # 4. Build Size Filter Query (Handles ranges like >50MB <1GB)
+    size_label = "None"
+    if size_args:
+        size_query = {}
+        all_sizes = re.findall(r"([<>])\s*([\d\.]+)\s*([KMG]?B)", size_args.upper())
+        
+        labels = []
+        for op, val, unit in all_sizes:
+            val = float(val)
+            mult = {"KB": 1024, "MB": 1024**2, "GB": 1024**3}.get(unit, 1)
+            size_bytes = int(val * mult)
+            
+            if op == ">":
+                size_query["$gt"] = size_bytes
+            elif op == "<":
+                size_query["$lt"] = size_bytes
+            labels.append(f"{op}{val}{unit}")
+                
+        if size_query:
+            db_query["file_size"] = size_query
+            size_label = " ".join(labels)
+
+    if not db_query:
+        return await message.reply_text(get(lang, "SCRUB_USAGE"))
 
     msg = await message.reply_text(get(lang, "SCRUB_SCANNING"))
     try:
@@ -839,7 +869,7 @@ async def scrub_database(client, message: Message):
         stats_cur = Media.collection.aggregate(pipeline)
         stats     = await stats_cur.to_list(length=1)
         if not stats:
-            return await msg.edit_text(get(lang, "SCRUB_NOT_FOUND", pattern=pattern))
+            return await msg.edit_text(get(lang, "SCRUB_NOT_FOUND", pattern=pattern or "None"))
 
         stats       = stats[0]
         total_count = stats.get("total_count", 0)
@@ -853,9 +883,8 @@ async def scrub_database(client, message: Message):
         query_id           = str(uuid.uuid4())[:8]
         PURGE_CACHE[query_id] = db_query
 
-        size_label = f"{size_op} {get_size(size_bytes)}" if size_op else "None"
         text = get(lang, "SCRUB_CONFIRM",
-                   pattern=pattern, size=size_label,
+                   pattern=pattern or "None", size=size_label,
                    count=total_count, min_size=min_size, max_size=max_size,
                    samples=sample_names)
         buttons = [[
@@ -865,7 +894,7 @@ async def scrub_database(client, message: Message):
         await msg.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons),
                             parse_mode=enums.ParseMode.HTML)
         dlog("SCRUB_SCAN", user_id=message.from_user.id,
-             extra={"pattern": pattern, "count": total_count})
+             extra={"pattern": pattern or "None", "count": total_count})
 
     except Exception as exc:
         logger.exception("Scrub scan error")
