@@ -200,10 +200,6 @@ class Database:
     async def get_db_size(self):
         return (await self.db.command("dbstats"))['dataSize']
 
-
-db = Database(DATABASE_URI, DATABASE_NAME)
-
-
     # ── Language preference ───────────────────────────────────────────────────
     async def get_user_lang(self, user_id: int) -> str:
         """Return stored language code for user, defaulting to 'en'."""
@@ -223,3 +219,7 @@ db = Database(DATABASE_URI, DATABASE_NAME)
     async def total_chats_count(self):
         """Alias for total_chat_count for API consistency."""
         return await self.total_chat_count()
+
+db = Database(DATABASE_URI, DATABASE_NAME)
+
+
