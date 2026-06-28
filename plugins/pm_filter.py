@@ -847,8 +847,10 @@ async def auto_filter(client, msg, spoll=False):
         if re.findall("((^\/|^,|^!|^\.|^[\U0001F600-\U000E007F]).*)", message.text):
             return
         if len(message.text) < 100:
-            search = message.text
+            search = " ".join(message.text.replace("\n", " ").replace("\r", " ").split())
             files, offset, total_results = await get_search_results(search.lower(), offset=0, filter=True)
+            #search = message.text
+            #files, offset, total_results = await get_search_results(search.lower(), offset=0, filter=True)
             if not files:
                 if settings["spell_check"]:
                     return await advantage_spell_chok(client, msg)
@@ -986,12 +988,23 @@ async def advantage_spell_chok(client, msg):
     mv_id = msg.id
     user_id = msg.from_user.id if msg.from_user else 0
     req_user = await client.get_users(user_id)
-#    logger.info(f"Received spell check request from user {req_user.username or user_id} (User ID: {user_id}).")
+    logger.info(f"Received spell check request from user {req_user.username or user_id} (User ID: {user_id}).")
 
-    query = re.sub(
+   # query = re.sub(
+   #     r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|movie(s)?|new|latest|br((o|u)h?)*|^h(e|a)?(l)*(o)*|mal(ayalam)?|t(h)?amil|file|that|find|und(o)*|kit(t(i|y)?)?o(w)?|thar(u)?(o)*w?|kittum(o)*|aya(k)*(um(o)*)?|full\smovie|any(one)|with\ssubtitle(s)?)",
+   #     "", msg.text, flags=re.IGNORECASE
+   # ).strip()
+    # 1. Strip structural keywords cleanly using regex rules
+    raw_query = re.sub(
         r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|movie(s)?|new|latest|br((o|u)h?)*|^h(e|a)?(l)*(o)*|mal(ayalam)?|t(h)?amil|file|that|find|und(o)*|kit(t(i|y)?)?o(w)?|thar(u)?(o)*w?|kittum(o)*|aya(k)*(um(o)*)?|full\smovie|any(one)|with\ssubtitle(s)?)",
         "", msg.text, flags=re.IGNORECASE
     ).strip()
+
+    # 2. CRITICAL SAFETY FIX: Flatten carriage returns and convert multi-spaces down to single spaces
+    query = " ".join(raw_query.replace("\n", " ").replace("\r", " ").split())
+
+    if not query:
+        return
 
 #    logger.info(f"Processed query: {query}")
 
