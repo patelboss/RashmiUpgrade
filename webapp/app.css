@@ -17,7 +17,7 @@
   --mono:      'JetBrains Mono', monospace;
 }
 
-/* ── ADDED: Light Theme Overrides ── */
+/* ── Light Theme Overrides ── */
 body.light-theme {
   --bg:        #f4f6fa;
   --bg2:       #ffffff;
@@ -97,9 +97,9 @@ body {
   color: var(--btn-text);
 }
 
-/* ── ADDED: Theme Toggle Button Layout ── */
+/* ── Theme Toggle Button Layout ── */
 .theme-toggle-btn {
-  margin-left: auto; /* Pushes the button to the absolute top corner edge */
+  margin-left: auto;
   background: var(--card-bg);
   border: 1px solid var(--border);
   color: var(--text);
@@ -283,6 +283,11 @@ body:not(.light-theme) .moon-icon { display: none; }
   color: var(--sub);
   font-family: var(--mono);
 }
+.file-size {
+  font-size: 0.73rem;
+  color: var(--sub);
+  font-family: var(--mono);
+}
 .file-caption {
   font-size: 0.75rem;
   color: var(--sub);
@@ -372,7 +377,7 @@ body:not(.light-theme) .moon-icon { display: none; }
   font-weight: 700;
   background: var(--accent);
   color: var(--btn-text);
-  padding: 2px 9px;
+  padding: 2px 99px;
   border-radius: 100px;
 }
 
@@ -495,6 +500,30 @@ body:not(.light-theme) .moon-icon { display: none; }
 .btn-primary { background: var(--accent); color: var(--btn-text); }
 .btn-secondary { background: var(--card-bg); border: 1.5px solid var(--border); color: var(--text); }
 .btn-primary:active, .btn-secondary:active { opacity: 0.8; transform: scale(0.97); }
+
+/* ── ✅ TOAST POPUP UI LAYER ── */
+.toast-popup {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%) translateY(30px);
+  background: #f44336; /* Warning Crimson Crimson Color Scheme */
+  color: #ffffff;
+  padding: 12px 24px;
+  border-radius: 16px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  z-index: 1100;
+  pointer-events: none;
+  opacity: 0;
+  white-space: nowrap;
+  transition: opacity 0.2s ease, transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.toast-popup.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
 
 /* ── Scroll bar ── */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
