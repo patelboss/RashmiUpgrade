@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import datetime
 import logging
+import re
 import ujson
 from urllib.parse import parse_qsl
 from aiohttp import web
@@ -67,17 +68,26 @@ def _verify_and_extract_user(init_data: str) -> int | None:
 
 @api_routes.get("/api/search")
 async def api_search(request: web.Request) -> web.Response:
-    q = request.rel_url.query.get("q", "").strip()
+    raw_q = request.rel_url.query.get("q", "").strip()
     offset = int(request.rel_url.query.get("offset", 0))
     max_res = min(int(request.rel_url.query.get("max", 15)), 50)
     file_type = request.rel_url.query.get("type", "") or None
 
-    if not q or len(q) < 2:
+    # ── ⚡ OPTIMIZATION & RE-REGEX SANITIZATION ──
+    # 1. Flatten all lines/hidden breaks
+    flattened = raw_q.replace("\n", " ").replace("\r", " ")
+    # 2. Extract only English letters, numbers, and normal white space (Destroys dangerous wildcards like * and .)
+    alphanumeric_only = re.sub(r'[^a-zA-Z0-9\s]', ' ', flattened)
+    # 3. Compress double spaces down
+    q = " ".join(alphanumeric_only.split())
+
+    # ✅ REQUIRE MINIMUM 3 CHARACTERS FOR OPTIMIZED DB MATCHING
+    if not q or len(q) < 3:
         return web.json_response({"files": [], "total_results": 0, "next_offset": ""})
 
     try:
         files, next_offset, total = await get_search_results(
-            query=q,
+            query=q.lower(),
             file_type=file_type,
             max_results=max_res,
             offset=offset,
@@ -90,7 +100,7 @@ async def api_search(request: web.Request) -> web.Response:
             }
         )
     except Exception as exc:
-        logger.exception("Search API error: %s", exc)
+        logger.exception("Search API error for query '%s': %s", q, exc)
         return web.json_response({"error": "Search failed"}, status=500)
 
 
@@ -114,7 +124,6 @@ async def _fetch_and_cache_stats(bot_client) -> None:
     total_users = await users_db.total_users_count()
     total_chats = await users_db.total_chat_count()
 
-    # Pass the resolved client context explicitly down to the sub count component
     subscriber_count = await get_channel_subscriber_count(bot_client, AUTH_CHANNEL)
     logger.info("AUTH_CHANNEL=%s | subscriber_count=%s", AUTH_CHANNEL, subscriber_count)
     latest_promo_text = "Comming Soon 🔜"
@@ -188,13 +197,10 @@ async def api_stats(request: web.Request) -> web.Response:
         return web.json_response({"error": "Stats unavailable"}, status=500)
 
 
-# ── 🚀 SEAMLESS PROXY ROUTE USING REAL TARGET PARAMETERS ─────────────────────
 @api_routes.post("/api/send_file")
 async def api_send_file(request: web.Request) -> web.Response:
     try:
         from pyrogram.enums import ChatType
-        
-        # ✅ FIX 1: Lazy import inside runtime block prevents startup circular imports
         from plugins.pm_filter import cb_handler
 
         payload = await request.json()
@@ -202,7 +208,6 @@ async def api_send_file(request: web.Request) -> web.Response:
         user_id = payload.get("user_id")
         init_data = payload.get("init_data")
         
-        # Pull privacy filter tracking parameters directly from frontend layout
         is_protected = bool(payload.get("protect", False))
 
         if not user_id:
@@ -219,13 +224,10 @@ async def api_send_file(request: web.Request) -> web.Response:
             logger.error("Aiohttp global store is missing the active running 'bot_client' reference context.")
             return web.json_response({"status": "redirect_required"}, status=200)
 
-        # ── 🛠️ BUILD ENVIRONMENT MOCKS ────────────────────────────────────────
-        # Explicitly pass your static group chat ID context parameter
         DUMMY_CHAT_ID = -1001860020592
         mock_chat = type("MockChat", (object,), {"id": DUMMY_CHAT_ID, "type": ChatType.SUPERGROUP})()
         
         async def mock_reply_func(*args, **kwargs):
-            # Extract the actual text string from the args tuple
             text_content = args if args else "Action processed."
             return await bot_client.send_message(chat_id=user_id, text=text_content)
 
@@ -242,10 +244,8 @@ async def api_send_file(request: web.Request) -> web.Response:
 
         mock_user = type("MockUser", (object,), {"id": user_id, "first_name": "User"})()
 
-        # Map data prefix based on structural privacy requirements
         prefix = "filep" if is_protected else "file"
 
-        # Build complete custom CallbackQuery template instance matching native variables
         mock_query = type(
             "MockCallbackQuery",
             (object,),
@@ -254,20 +254,15 @@ async def api_send_file(request: web.Request) -> web.Response:
                 "client": bot_client,
                 "from_user": mock_user,
                 "message": mock_msg,
-                "data": f"{prefix}#{raw_file_id}", # Reuses your precise file vs filep split syntax
+                "data": f"{prefix}#{raw_file_id}",
                 "answer": lambda *args, **kwargs: asyncio.sleep(0), 
                 "edit_message_reply_markup": lambda *args, **kwargs: asyncio.sleep(0)
             }
         )()
 
-        # ── ⚡ INJECT INTO NATIVE FILTER SYSTEM (AS BACKGROUND TASK) ──
         logger.info("Forwarding mock WebApp event payload straight to pm_filter.cb_handler -> User: %s | Data: %s", user_id, mock_query.data)
-        
-        # ✅ FIX 2: Execute as a non-blocking background task. 
-        # This prevents the web server from hanging while waiting for your auto-delete timer!
         asyncio.create_task(cb_handler(bot_client, mock_query))
 
-        # Return the success response immediately so the frontend popup can trigger.
         return web.json_response({"status": "direct_sent"}, status=200)
 
     except Exception as global_exc:
