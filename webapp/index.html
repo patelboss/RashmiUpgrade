@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>AutoFile Search</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" />
+  
+  <link rel="stylesheet" href="app.css" />
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-logo">
+      <div class="channel-logo-mini">🍿</div>
+      AutoFile
+    </div>
+    <div class="nav-tabs" id="navTabs">
+      <button class="tab active" data-tab="search">Search</button>
+      <button class="tab" data-tab="recent">Recent</button>
+      <button class="tab" data-tab="stats">About</button>
+    </div>
+    <button class="theme-toggle-btn" id="themeToggleBtn" title="Toggle Theme" aria-label="Toggle Theme">
+      <svg class="sun-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      <svg class="moon-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    </button>
+  </nav>
+
+  <section class="tab-panel active" id="tab-search">
+    <div class="search-hero">
+      <div class="search-wrapper">
+        <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input
+          id="searchInput"
+          class="search-input"
+          type="search"
+          placeholder="Search movies, series, files…"
+          autocomplete="off"
+          autocorrect="off"
+          spellcheck="false"
+        />
+        <button class="clear-btn" id="clearBtn" title="Clear">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <div class="filter-row">
+        <button class="chip active" data-type="">All</button>
+        <button class="chip" data-type="video">Video</button>
+        <button class="chip" data-type="document">Document</button>
+        <button class="chip" data-type="audio">Audio</button>
+      </div>
+    </div>
+
+    <div id="searchStatus" class="status-msg hidden"></div>
+    <div id="resultsGrid" class="results-grid"></div>
+    <div class="load-more-wrap">
+      <button id="loadMoreBtn" class="btn-load-more hidden">Load more</button>
+    </div>
+    <div id="emptyState" class="empty-state hidden">
+      <div class="empty-icon">🔍</div>
+      <p class="empty-title">No files found</p>
+      <p class="empty-sub">Try different keywords or check spelling</p>
+    </div>
+    <div id="idleState" class="idle-state">
+      <div class="idle-icon">🎬</div>
+      <p>Start typing to search the media library</p>
+      <div class="quick-tags">
+        <span class="qtag" onclick="quickSearch('movies')">Movies</span>
+        <span class="qtag" onclick="quickSearch('series')">Series</span>
+        <span class="qtag" onclick="quickSearch('web series')">Web Series</span>
+        <span class="qtag" onclick="quickSearch('4k')">4K</span>
+        <span class="qtag" onclick="quickSearch('hindi')">Hindi</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="tab-panel" id="tab-recent">
+    <div class="section-header">
+      <h2>Recently Added</h2>
+      <span class="badge" id="recentCount">–</span>
+    </div>
+    <div id="recentGrid" class="results-grid"></div>
+    <div id="recentEmpty" class="empty-state hidden">
+      <div class="empty-icon">📭</div>
+      <p class="empty-title">Nothing yet</p>
+    </div>
+    <div id="recentLoader" class="loader-wrap">
+      <div class="spinner"></div>
+    </div>
+  </section>
+
+  <section class="tab-panel" id="tab-stats">
+    <div class="section-header">
+      <h2>About Service</h2>
+      <!-- ✅ ADDED: Cache Refresh Action Button -->
+      <button class="theme-toggle-btn" id="refreshStatsBtn" title="Refresh Service Data" aria-label="Refresh Data" style="margin-left: auto;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+      </button>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-icon">📊</div>
+        <div class="stat-value" id="statFiles">–</div>
+        <div class="stat-label">Total Files</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">📢</div>
+        <div class="stat-value" id="statSubs">–</div>
+        <div class="stat-label">Subscribers</div>
+      </div>
+    </div>
+
+    <div class="info-card">
+      <div class="info-row"><span class="info-key">Current Bot</span><span class="info-val" id="infoBotName">–</span></div>
+      <div class="info-row"><span class="info-key">Bot Admin</span><span class="info-val" id="infoBotAdmin">–</span></div>
+      <!-- ✅ ADDED: Storage target row mappings -->
+      <div class="info-row"><span class="info-key">Used Storage</span><span class="info-val" id="infoUsedStorage">–</span></div>
+      <div class="info-row"><span class="info-key">Free Storage</span><span class="info-val" id="infoFreeStorage">–</span></div>
+      <div class="info-row"><span class="info-key">Status</span><span class="info-val status-ok">● Active</span></div>
+    </div>
+
+    <div class="promo-section-header">🎯 Latest Promotion</div>
+    <div class="ad-panel-card" id="promoAdPanel">
+      <div class="ad-loading">Loading channel campaign broadcast...</div>
+    </div>
+
+    <div class="about-card" style="margin-top: 20px;">
+      <p class="about-text">AutoFile Search Engine Hub.</p>
+      <p class="about-text muted">Powered by Pyrogram · MongoDB · Telegram Web Apps</p>
+    </div>
+  </section>
+
+  <div class="sheet-overlay hidden" id="sheetOverlay"></div>
+  <div class="bottom-sheet hidden" id="bottomSheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-content" id="sheetContent"></div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
