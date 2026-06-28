@@ -526,9 +526,9 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 
                 k = await msg.reply(script.DELETEMSG ,quote=True, protect_content=True)
                 await asyncio.sleep(DLTTM)
-                await msg.delete()
                 await k.edit_text("<b>Your File/Video is successfully deleted!!!</b>") #,reply_markup=InlineKeyboardMarkup(btn))
-    
+                await msg.delete()
+                
         
         except UserIsBlocked:
             await query.answer('𝐔𝐧𝐛𝐥𝐨𝐜𝐤 𝐭𝐡𝐞 𝐁𝐨𝐭!', show_alert=True)
