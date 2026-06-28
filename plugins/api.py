@@ -6,7 +6,7 @@ Endpoints:
   GET /api/search?q=<query>&offset=<n>&max=<n>&type=<video|audio|document>
   GET /api/recent?max=<n>
   GET /api/stats
-  POST /api/send_file  <-- 🎯 Route proxy passing mock structures into native components
+  POST /api/send_file  <-- Proxy passing mock structures into native components
 """
 
 from __future__ import annotations
@@ -22,8 +22,8 @@ from plugins.subs_cmd import get_channel_subscriber_count
 from info import AUTH_CHANNEL
 from database.ia_filterdb import Media, get_search_results
 from database.users_chats_db import db as users_db
-from utils import get_size
-
+from utils import get_size, temp
+from plugins.pm_filter import *
 logger = logging.getLogger(__name__)
 api_routes = web.RouteTableDef()
 
@@ -66,32 +66,67 @@ def _verify_and_extract_user(init_data: str) -> int | None:
     return None
 
 
+# ── 🚀 UNIFIED WEB SEARCH THROUGH REAL CHAT AUTOFILTERS ───────────────────
 @api_routes.get("/api/search")
 async def api_search(request: web.Request) -> web.Response:
+    from pyrogram.enums import ChatType
+    from plugins.pm_filter import auto_filter
+
     raw_q = request.rel_url.query.get("q", "").strip()
     offset = int(request.rel_url.query.get("offset", 0))
     max_res = min(int(request.rel_url.query.get("max", 15)), 50)
     file_type = request.rel_url.query.get("type", "") or None
 
-    # ── ⚡ OPTIMIZATION & RE-REGEX SANITIZATION ──
-    # 1. Flatten all lines/hidden breaks
+    # Pre-process strings exactly how your frontend expects them
     flattened = raw_q.replace("\n", " ").replace("\r", " ")
-    # 2. Extract only English letters, numbers, and normal white space (Destroys dangerous wildcards like * and .)
     alphanumeric_only = re.sub(r'[^a-zA-Z0-9\s]', ' ', flattened)
-    # 3. Compress double spaces down
     q = " ".join(alphanumeric_only.split())
 
-    # ✅ REQUIRE MINIMUM 3 CHARACTERS FOR OPTIMIZED DB MATCHING
     if not q or len(q) < 3:
         return web.json_response({"files": [], "total_results": 0, "next_offset": ""})
 
+    bot_client = request.app.get("bot_client")
+    if not bot_client:
+        return web.json_response({"error": "Core framework offline"}, status=503)
+
     try:
-        files, next_offset, total = await get_search_results(
-            query=q.lower(),
-            file_type=file_type,
-            max_results=max_res,
-            offset=offset,
-        )
+        # Use your target group's production ID context layout mapping
+        DUMMY_CHAT_ID = -1001860020592
+        mock_chat = type("MockChat", (object,), {"id": DUMMY_CHAT_ID, "type": ChatType.SUPERGROUP})()
+        
+        # Build the mock incoming message object to trigger your native filtering
+        mock_msg = type(
+            "MockMessage",
+            (object,),
+            {
+                "id": 1,
+                "chat": mock_chat,
+                "text": q,
+                "from_user": type("MockUser", (object,), {"id": 0})()
+            }
+        )()
+
+        # Execute your core, highly-optimized filtering logic directly
+        # This resolves missing characters, splits terms, handles custom captions, and tracks pagination
+        await auto_filter(bot_client, mock_msg)
+
+        # Retrieve the search metadata generated natively by your filtering run out of global memory
+        key = f"{DUMMY_CHAT_ID}-1"
+        search_query = temp.GETALL.get(key, [])
+
+        # Fallback query lookup execution if global memory tracking arrays are busy
+        if not search_query:
+            files, next_offset, total = await get_search_results(
+                query=q.lower(),
+                file_type=file_type,
+                max_results=max_res,
+                offset=offset,
+            )
+        else:
+            files = search_query[offset : offset + max_res]
+            total = len(search_query)
+            next_offset = offset + len(files) if total > offset + max_res else ""
+
         return web.json_response(
             {
                 "files": [_serialize_file(f) for f in files],
@@ -100,7 +135,7 @@ async def api_search(request: web.Request) -> web.Response:
             }
         )
     except Exception as exc:
-        logger.exception("Search API error for query '%s': %s", q, exc)
+        logger.exception("Unified Filter Search API error for query '%s': %s", q, exc)
         return web.json_response({"error": "Search failed"}, status=500)
 
 
@@ -154,15 +189,6 @@ async def _fetch_and_cache_stats(bot_client) -> None:
         datetime.time.min,
     )
 
-    logger.info(
-        "Stats cache updated | files=%s users=%s chats=%s subscribers=%s expires_at=%s",
-        total_files,
-        total_users,
-        total_chats,
-        subscriber_count,
-        _CACHE_EXPIRE_TIME,
-    )
-
 
 @api_routes.get("/api/stats")
 async def api_stats(request: web.Request) -> web.Response:
@@ -178,22 +204,10 @@ async def api_stats(request: web.Request) -> web.Response:
     try:
         async with _STATS_LOCK:
             if force_refresh or not _STATS_CACHE or not _CACHE_EXPIRE_TIME or now >= _CACHE_EXPIRE_TIME:
-                logger.info(
-                    "Stats refresh requested | force_refresh=%s | cache_present=%s | expired=%s",
-                    force_refresh,
-                    bool(_STATS_CACHE),
-                    bool(_CACHE_EXPIRE_TIME and now >= _CACHE_EXPIRE_TIME),
-                )
                 await _fetch_and_cache_stats(bot_client)
-
         return web.json_response(_STATS_CACHE)
-
     except Exception as exc:
         logger.exception("Cached Stats API error: %s", exc)
-        if _STATS_CACHE:
-            logger.warning("Serving stale stats cache due to refresh failure.")
-            return web.json_response(_STATS_CACHE)
-
         return web.json_response({"error": "Stats unavailable"}, status=500)
 
 
@@ -214,15 +228,10 @@ async def api_send_file(request: web.Request) -> web.Response:
             user_id = _verify_and_extract_user(init_data)
 
         if not user_id:
-            logger.warning("WebApp Pipeline Forwarder bypassed: Missing a target User ID entry.")
             return web.json_response({"status": "redirect_required"}, status=200)
 
         user_id = int(user_id)
-
         bot_client = request.app.get("bot_client")
-        if not bot_client:
-            logger.error("Aiohttp global store is missing the active running 'bot_client' reference context.")
-            return web.json_response({"status": "redirect_required"}, status=200)
 
         DUMMY_CHAT_ID = -1001860020592
         mock_chat = type("MockChat", (object,), {"id": DUMMY_CHAT_ID, "type": ChatType.SUPERGROUP})()
@@ -243,7 +252,6 @@ async def api_send_file(request: web.Request) -> web.Response:
         )()
 
         mock_user = type("MockUser", (object,), {"id": user_id, "first_name": "User"})()
-
         prefix = "filep" if is_protected else "file"
 
         mock_query = type(
@@ -260,7 +268,7 @@ async def api_send_file(request: web.Request) -> web.Response:
             }
         )()
 
-        logger.info("Forwarding mock WebApp event payload straight to pm_filter.cb_handler -> User: %s | Data: %s", user_id, mock_query.data)
+        logger.info("Forwarding mock WebApp event payload straight to pm_filter.cb_handler -> User: %s", user_id)
         asyncio.create_task(cb_handler(bot_client, mock_query))
 
         return web.json_response({"status": "direct_sent"}, status=200)
