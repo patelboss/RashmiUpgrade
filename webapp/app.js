@@ -115,6 +115,26 @@ function showFeedback(text = '✓') {
   }, 1800);
 }
 
+// ✅ ADDED: Dynamic Toast Notification Trigger Box
+function showWarningToast(text) {
+  const toast = document.getElementById('toastNotification');
+  if (!toast) return;
+  
+  toast.textContent = text || "⚠️ Type minimum 3 characters of movie name!";
+  toast.classList.remove('hidden');
+  
+  setTimeout(() => {
+    toast.classList.add('show');
+  }, 10);
+
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => {
+      toast.classList.add('hidden');
+    }, 200);
+  }, 2500);
+}
+
 // ── API helpers ───────────────────────────────────────────────────────────
 async function apiFetch(path) {
   console.log(`Executing remote asynchronous fetch path: ${path}`);
@@ -146,10 +166,21 @@ function renderCard(file) {
 
 // ── Search ────────────────────────────────────────────────────────────────
 async function doSearch(reset = true) {
-  if (!state.query.trim()) return;
+  // ✅ FIX: Clean out symbols and check for proper alphanumeric space criteria
+  const cleaned = state.query.replace(/[^a-zA-Z0-9\s]/g, ' ');
+  const finalQuery = cleaned.trim().replace(/\s+/g, ' ');
+  
+  if (!finalQuery) return;
+
+  // ✅ FIX: Block queries that fall below the 3-character database index lookup threshold
+  if (finalQuery.length < 3) {
+    showWarningToast("⚠️ Type minimum 3 characters of movie name!");
+    return;
+  }
+
   if (state.loading) return;
 
-  console.log(`Initiating file lookup execution stack. Target Query: "${state.query}" | ResetState: ${reset}`);
+  console.log(`Initiating file lookup execution stack. Target Query: "${finalQuery}" | ResetState: ${reset}`);
 
   if (reset) {
     state.offset  = 0;
@@ -165,7 +196,7 @@ async function doSearch(reset = true) {
 
   try {
     const params = new URLSearchParams({
-      q:         state.query,
+      q:         finalQuery,
       offset:    state.offset,
       max:       state.pageSize,
     });
@@ -203,7 +234,12 @@ async function doSearch(reset = true) {
 }
 
 const debouncedSearch = debounce(() => {
-  if (state.query.trim().length >= 2) doSearch();
+  const cleaned = state.query.replace(/[^a-zA-Z0-9\s]/g, ' ').trim();
+  if (cleaned.length >= 3) {
+    doSearch();
+  } else if (cleaned.length > 0) {
+    showWarningToast("⚠️ Type minimum 3 characters of movie name!");
+  }
 }, 380);
 
 // ── Recent files ──────────────────────────────────────────────────────────
@@ -246,24 +282,20 @@ async function loadStats(forceRefresh = false) {
       apiFetch(`/api/stats${forceRefresh ? '?refresh=true' : ''}`),
     ]);
 
-    // ── Stat cards (total_files + subscriber_count) ───────────────────────
     $('#statFiles').textContent = (stats.total_files ?? '–').toLocaleString();
     $('#statSubs').textContent  = (stats.subscriber_count ?? '–').toLocaleString();
 
-    // ── Info rows (bot name / admin / storage options) ────────────────────
     $('#infoBotName').textContent  = health.bot || '–';
     $('#infoBotAdmin').textContent = health.username ? '@' + health.username : '–';
     
-    // Bind Storage Parameters Directly From JSON Object Keys
     $('#infoUsedStorage').textContent = stats.used_storage || '–';
     $('#infoFreeStorage').textContent = stats.free_storage || '–';
 
-    // ── Latest promo text → #promoAdPanel (Parses HTML formatting nodes) ──
     const promoPanel = $('#promoAdPanel');
     if (promoPanel) {
       const promoText = (stats.latest_promo_text || '').trim();
       if (promoText) {
-        promoPanel.innerHTML = promoText; // innerHTML allows rich formatting links
+        promoPanel.innerHTML = promoText;
       } else {
         promoPanel.innerHTML = '<div class="ad-loading">No promotions at the moment.</div>';
       }
@@ -337,8 +369,7 @@ function escHtml(s) {
     .replace(/"/g, '&quot;');
 }
 
-// ── ✅ UPDATED: Native Direct Background Dispatch with showPopup ───────────
-// ── ✅ UPDATED: Native Direct Background Dispatch with showPopup & Spam Protection ──
+// ── Direct Background Dispatch with showPopup & Spam Protection ──
 async function getFile(isSendAll = false) {
   let targetId;
   let isProtected = false;
@@ -357,7 +388,6 @@ async function getFile(isSendAll = false) {
   const actionBtn = isSendAll ? document.getElementById('sendAllBtn') : document.querySelector('.btn-primary');
   const originalText = actionBtn ? actionBtn.innerHTML : '📥 Get File';
   
-  // ✅ FIX: Lock the button so the user cannot spam click it
   if (actionBtn) {
       actionBtn.innerHTML = '🔄 Processing...';
       actionBtn.disabled = true;
@@ -380,7 +410,6 @@ async function getFile(isSendAll = false) {
     const resData = await response.json();
 
     if (response.ok && resData.status === 'direct_sent') {
-      // ✅ TRIGGER THE NATIVE POPUP DIALOG INSTANTLY
       if (tg && tg.showPopup) {
         tg.showPopup({
           title: "File Dispatched! 🚀",
@@ -394,7 +423,6 @@ async function getFile(isSendAll = false) {
       return;
     }
     
-    // Fallback to deep link redirection
     if (tg) {
       const prefix = isSendAll ? "allfiles" : "get";
       tg.openTelegramLink(`https://t.me/Rashmi_v2_bot?start=${prefix}_${targetId}`);
@@ -411,7 +439,6 @@ async function getFile(isSendAll = false) {
       tg.openTelegramLink(`https://t.me/Rashmi_v2_bot?start=${prefix}_${targetId}`);
     }
   } finally {
-    // ✅ FIX: Unlock the button if the user stays on the screen
     if (actionBtn) {
         actionBtn.innerHTML = originalText;
         actionBtn.disabled = false;
@@ -446,7 +473,7 @@ document.querySelectorAll('.tab').forEach(btn => {
     $('#tab-' + tab)?.classList.add('active');
 
     if (tab === 'recent') loadRecent();
-    if (tab === 'stats')  loadStats(false); // Serve cached version by default
+    if (tab === 'stats')  loadStats(false);
   });
 });
 
@@ -493,9 +520,8 @@ clearBtn.addEventListener('click', () => {
 loadMoreBtn.addEventListener('click', () => doSearch(false));
 sheetOverlay.addEventListener('click', closeSheet);
 
-// ── Manual Refresh Data Trigger ──────────────────────────────────────────
 document.getElementById('refreshStatsBtn')?.addEventListener('click', () => {
-  loadStats(true); // Forces backend cache flush
+  loadStats(true);
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────
