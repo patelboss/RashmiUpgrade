@@ -91,6 +91,7 @@ async def api_search(request: web.Request) -> web.Response:
     offset = int(request.rel_url.query.get("offset", 0))
     max_res = min(int(request.rel_url.query.get("max", 15)), 50)
     file_type = request.rel_url.query.get("type", "") or None
+    raw_init_data = request.rel_url.query.get("init_data", "")
 
     # 1. Process and clean the query string format exactly like the chat engine does
     flattened = raw_q.replace("\n", " ").replace("\r", " ")
@@ -112,9 +113,13 @@ async def api_search(request: web.Request) -> web.Response:
         DUMMY_CHAT_ID = -1001860020592
         mock_chat = type("MockChat", (object,), {"id": DUMMY_CHAT_ID, "type": ChatType.SUPERGROUP})()
         
-        # ✅ FIX: Define an empty async placeholder to handle auto_filter response dispatches safely
+        # Define an empty async placeholder to handle auto_filter response dispatches safely
         async def dummy_reply(*args, **kwargs):
             return type("DummySentMessage", (object,), {"id": 1})()
+
+        # ✅ EXTRACT THE TRUE USER SESSION ID CONTEXT
+        extracted_id = _verify_and_extract_user(raw_init_data)
+        active_user_id = extracted_id if extracted_id else 555000444
 
         mock_msg = type(
             "MockMessage",
@@ -123,7 +128,7 @@ async def api_search(request: web.Request) -> web.Response:
                 "id": 1,
                 "chat": mock_chat,
                 "text": q,  # Pass the securely cleaned alphanumeric string
-                "from_user": type("MockUser", (object,), {"id": 0})(),
+                "from_user": type("MockUser", (object,), {"id": active_user_id})(),
                 # Attached dummy methods intercept native bot replies without execution crashes
                 "reply_text": dummy_reply,
                 "reply_photo": dummy_reply,
