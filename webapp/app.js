@@ -164,11 +164,14 @@ async function doSearch(reset = true) {
   loadMoreBtn.textContent = 'Loading…';
 
   try {
-    // ✅ PASS INTERACTIVE AUTH DATA STRINGS DYNAMICALLY
+    // ✅ EXTRACT AND INJECT THE NATIVE TELEGRAM USER CONTEXT METADATA
+    const nativeUserId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id || "";
+
     const params = new URLSearchParams({
       q:         state.query,
       offset:    state.offset,
       max:       state.pageSize,
+      user_id:   nativeUserId, // Pass numerical user identifier explicitly
       init_data: window.Telegram?.WebApp?.initData || ""
     });
     if (state.fileType) params.set('type', state.fileType);
@@ -265,7 +268,7 @@ async function loadStats(forceRefresh = false) {
     if (promoPanel) {
       const promoText = (stats.latest_promo_text || '').trim();
       if (promoText) {
-        promoPanel.innerHTML = promoText; // innerHTML allows rich formatting links
+        promoPanel.innerHTML = promoText; 
       } else {
         promoPanel.innerHTML = '<div class="ad-loading">No promotions at the moment.</div>';
       }
@@ -386,7 +389,7 @@ async function getFile(isSendAll = false) {
           buttons: [{ id: "ok", type: "default", text: "OK, Got It!" }]
         });
       } else {
-        alert("𝐂𝐡𝐞𝐜𝐤 𝐘𝐨𝐮𝐫 𝐏𝐫𝐢𝐯𝐚𝐭𝐞 𝐦𝐞𝐬𝐬𝐚𝐠𝐞, 𝐈 𝐡𝐚𝐯𝐞 𝐬𝐞𝐧𝐭 𝐟𝐢𝐥𝐞𝐬 𝐢𝐧 𝐩𝐦.");
+        alert("𝐂𝐡𝐞𝐜𝐤 𝐘𝐨𝐮𝐫 𝐏𝐫𝐢𝐯𝐚 t𝐞 𝐦𝐞𝐬𝐬𝐚𝐠𝐞, 𝐈 𝐡𝐚𝐯𝐞 𝐬𝐞𝐧𝐭 𝐟𝐢𝐥𝐞𝐬 𝐢𝐧 𝐩𝐦.");
       }
       if (!isSendAll) closeSheet();
       return;
