@@ -32,6 +32,31 @@ _STATS_CACHE = None
 _CACHE_EXPIRE_TIME = None
 _STATS_LOCK = asyncio.Lock()
 
+import sys
+#import logging
+from pyrogram.enums import ParseMode
+
+# 1. Initialize a clean, single logger instance for this module
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+# Prevent log messages from leaking duplicate entries up to the root handlers
+logger.propagate = False
+
+# Clear out any stale or conflicting handlers if the module reloads
+if logger.hasHandlers():
+    logger.handlers.clear()
+
+# 2. Construct a dedicated stdout stream pipeline
+stdout_handler = logging.StreamHandler(sys.stdout)
+stdout_handler.setLevel(logging.INFO)
+
+# 3. Apply the human-readable formatting matrix
+formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+stdout_handler.setFormatter(formatter)
+
+# 4. Attach the structured stream back to your active layout
+logger.addHandler(stdout_handler)
 
 def _serialize_file(doc) -> dict:
     """Convert a uMongo document or raw dict to a plain JSON-serialisable dict."""
