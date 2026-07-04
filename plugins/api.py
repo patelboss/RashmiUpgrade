@@ -15,6 +15,7 @@ import asyncio
 import datetime
 import logging
 import re
+import sys
 import ujson
 from urllib.parse import parse_qsl
 from aiohttp import web
@@ -24,7 +25,21 @@ from database.ia_filterdb import Media, get_search_results
 from database.users_chats_db import db as users_db
 from utils import get_size, temp
 from plugins.pm_filter import *
-logger = logging.getLogger(__name__)
+
+# ── 🛠️ UNIFIED SYSTEM LOGGING MATRIX CONFIGURATION ───────────────────
+logger = logging.getLogger("api_hub")
+logger.setLevel(logging.INFO)
+logger.propagate = False
+
+if logger.hasHandlers():
+    logger.handlers.clear()
+
+stdout_handler = logging.StreamHandler(sys.stdout)
+stdout_handler.setLevel(logging.INFO)
+formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+stdout_handler.setFormatter(formatter)
+logger.addHandler(stdout_handler)
+
 api_routes = web.RouteTableDef()
 
 # ── Global stats cache ───────────────────────────────────────────────────────
@@ -32,31 +47,6 @@ _STATS_CACHE = None
 _CACHE_EXPIRE_TIME = None
 _STATS_LOCK = asyncio.Lock()
 
-import sys
-#import logging
-from pyrogram.enums import ParseMode
-
-# 1. Initialize a clean, single logger instance for this module
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-
-# Prevent log messages from leaking duplicate entries up to the root handlers
-logger.propagate = False
-
-# Clear out any stale or conflicting handlers if the module reloads
-if logger.hasHandlers():
-    logger.handlers.clear()
-
-# 2. Construct a dedicated stdout stream pipeline
-stdout_handler = logging.StreamHandler(sys.stdout)
-stdout_handler.setLevel(logging.INFO)
-
-# 3. Apply the human-readable formatting matrix
-formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-stdout_handler.setFormatter(formatter)
-
-# 4. Attach the structured stream back to your active layout
-logger.addHandler(stdout_handler)
 
 def _serialize_file(doc) -> dict:
     """Convert a uMongo document or raw dict to a plain JSON-serialisable dict."""
@@ -107,9 +97,12 @@ async def api_search(request: web.Request) -> web.Response:
     alphanumeric_only = re.sub(r'[^a-zA-Z0-9\s]', ' ', flattened)
     q = " ".join(alphanumeric_only.split()).strip()
 
+    # ✅ ALWAYS SEEN LOGGING TRACE: This will show up clearly in your terminal output streams
+    logger.info(f"Incoming Search Request -> Raw: '{raw_q}' | Cleaned Match: '{q}'")
+
     # ✅ THE BULLETPROOF GUARD: Drop the request immediately if it's too short or contains only symbols
     if not q or len(q) < 3:
-        logger.warning(f"WebApp Search Rejected Early. Raw: '{raw_q}' | Cleaned: '{q}'")
+        logger.warning(f"⚠️ WebApp Search Rejected Early. Raw: '{raw_q}' dropped because Cleaned: '{q}' is too short.")
         return web.json_response({"files": [], "total_results": 0, "next_offset": ""})
 
     bot_client = request.app.get("bot_client")
@@ -126,7 +119,7 @@ async def api_search(request: web.Request) -> web.Response:
             {
                 "id": 1,
                 "chat": mock_chat,
-                "text": q,  # Pass the securely cleaned alphanumeric string
+                "text": q,
                 "from_user": type("MockUser", (object,), {"id": 0})()
             }
         )()
@@ -142,6 +135,7 @@ async def api_search(request: web.Request) -> web.Response:
             files = cached_results[offset : offset + max_res]
             total = len(cached_results)
             next_offset = offset + len(files) if total > offset + max_res else ""
+            logger.info(f"✨ Search serving from cache matrix framework memory! Found {total} items.")
         else:
             # ✅ SAFETY FIX: If falling back, pass the CLEANED lower-case 'q', NEVER the raw_q with symbols
             files, next_offset, total = await get_search_results(
@@ -150,6 +144,7 @@ async def api_search(request: web.Request) -> web.Response:
                 max_results=max_res,
                 offset=offset,
             )
+            logger.info(f"📁 Cache expired. Dispatched lookup straight to MongoDB. Results: {total}")
 
         return web.json_response(
             {
