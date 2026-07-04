@@ -77,13 +77,14 @@ async def api_search(request: web.Request) -> web.Response:
     max_res = min(int(request.rel_url.query.get("max", 15)), 50)
     file_type = request.rel_url.query.get("type", "") or None
 
-    # 1. Clean and sanitize the query string layout
+    # 1. Process and clean the query string format exactly like the chat engine does
     flattened = raw_q.replace("\n", " ").replace("\r", " ")
     alphanumeric_only = re.sub(r'[^a-zA-Z0-9\s]', ' ', flattened)
     q = " ".join(alphanumeric_only.split()).strip()
 
-    # Strict client defense guard check
+    # ✅ THE BULLETPROOF GUARD: Drop the request immediately if it's too short or contains only symbols
     if not q or len(q) < 3:
+        logger.warning(f"WebApp Search Rejected Early. Raw: '{raw_q}' | Cleaned: '{q}'")
         return web.json_response({"files": [], "total_results": 0, "next_offset": ""})
 
     bot_client = request.app.get("bot_client")
@@ -100,25 +101,24 @@ async def api_search(request: web.Request) -> web.Response:
             {
                 "id": 1,
                 "chat": mock_chat,
-                "text": q,
+                "text": q,  # Pass the securely cleaned alphanumeric string
                 "from_user": type("MockUser", (object,), {"id": 0})()
             }
         )()
 
-        # 2. Run the native filter engine to populate split matching/typo corrections
+        # 2. Execute your core chat filtering
         await auto_filter(bot_client, mock_msg)
 
-        # 3. Pull the calculated results out of the application cache layer
+        # 3. Pull from cache layer
         key = f"{DUMMY_CHAT_ID}-1"
         cached_results = temp.GETALL.get(key, [])
 
         if cached_results:
-            # Clear layout path: slice out the exact page requested from the bot's memory array
             files = cached_results[offset : offset + max_res]
             total = len(cached_results)
             next_offset = offset + len(files) if total > offset + max_res else ""
         else:
-            # Fallback layout path: execute direct index match ONLY if the memory cache is empty
+            # ✅ SAFETY FIX: If falling back, pass the CLEANED lower-case 'q', NEVER the raw_q with symbols
             files, next_offset, total = await get_search_results(
                 query=q.lower(),
                 file_type=file_type,
@@ -136,7 +136,6 @@ async def api_search(request: web.Request) -> web.Response:
     except Exception as exc:
         logger.exception("Unified Filter Search API error for query '%s': %s", q, exc)
         return web.json_response({"error": "Search failed"}, status=500)
-
 
 @api_routes.get("/api/recent")
 async def api_recent(request: web.Request) -> web.Response:
