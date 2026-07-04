@@ -858,7 +858,10 @@ async def auto_filter(client, msg, spoll=False):
             # 3. Compress double spaces left behind by stripped special characters
             search = " ".join(alphanumeric_only.split())
             logger.info(f"Processed query in auto_filter: {search}")
-            
+            if not search or len(search) < 3:
+                logger.warning(f"Aborting search. Cleaned query '{search}' is too short or empty.")
+                return
+                            
            # search = " ".join(message.text.replace("\n", " ").replace("\r", " ").split())
             files, offset, total_results = await get_search_results(search.lower(), offset=0, filter=True)
             #search = message.text
