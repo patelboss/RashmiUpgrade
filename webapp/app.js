@@ -98,7 +98,7 @@ function debounce(fn, delay = 400) {
 }
 
 function showFeedback(text = '✓') {
-  if (tg?.showPopup) return; 
+  if (tg?.showPopup) return;
   const el = document.createElement('div');
   el.textContent = text;
   el.style.cssText = `
@@ -113,6 +113,23 @@ function showFeedback(text = '✓') {
     el.style.opacity = '0';
     setTimeout(() => el.remove(), 250);
   }, 1800);
+}
+
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function getTelegramIdentity() {
+  const nativeUserId = tg?.initDataUnsafe?.user?.id || "";
+  const initData = tg?.initData || "";
+  return {
+    user_id: nativeUserId,
+    init_data: initData
+  };
 }
 
 // ── API helpers ───────────────────────────────────────────────────────────
@@ -146,7 +163,12 @@ function renderCard(file) {
 
 // ── Search ────────────────────────────────────────────────────────────────
 async function doSearch(reset = true) {
-  if (!state.query.trim()) return;
+  const trimmedQuery = state.query.trim();
+  if (!trimmedQuery) return;
+  if (trimmedQuery.length < 3) {
+    console.log(`Search skipped because query is too short: "${trimmedQuery}"`);
+    return;
+  }
   if (state.loading) return;
 
   console.log(`Initiating file lookup execution stack. Target Query: "${state.query}" | ResetState: ${reset}`);
@@ -164,21 +186,23 @@ async function doSearch(reset = true) {
   loadMoreBtn.textContent = 'Loading…';
 
   try {
-    // ✅ EXTRACT AND INJECT THE NATIVE TELEGRAM USER CONTEXT METADATA
-    const nativeUserId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id || "";
+    const { user_id: nativeUserId, init_data } = getTelegramIdentity();
 
     const params = new URLSearchParams({
       q:         state.query,
       offset:    state.offset,
       max:       state.pageSize,
-      user_id:   nativeUserId, // Pass numerical user identifier explicitly
-      init_data: window.Telegram?.WebApp?.initData || ""
+      user_id:   nativeUserId || "",
+      init_data: init_data || ""
     });
+
     if (state.fileType) params.set('type', state.fileType);
+
+    console.log("Search request params:", params.toString());
 
     const data = await apiFetch(`/api/search?${params}`);
     const files = data.files || [];
-    
+
     console.log(`Successfully fetched search results. Count parsed: ${files.length}`);
 
     state.results = state.results.concat(files);
@@ -208,7 +232,7 @@ async function doSearch(reset = true) {
 }
 
 const debouncedSearch = debounce(() => {
-  if (state.query.trim().length >= 2) doSearch();
+  if (state.query.trim().length >= 3) doSearch();
 }, 380);
 
 // ── Recent files ──────────────────────────────────────────────────────────
@@ -239,7 +263,7 @@ async function loadRecent() {
 // ── About / Stats View ────────────────────────────────────────────────────
 async function loadStats(forceRefresh = false) {
   console.log(`Requesting dynamic instance stats. Forced Refresh: ${forceRefresh}`);
-  
+
   const refreshBtn = $('#refreshStatsBtn');
   if (forceRefresh && refreshBtn) {
     refreshBtn.style.animation = "spin 1s linear infinite";
@@ -258,7 +282,7 @@ async function loadStats(forceRefresh = false) {
     // ── Info rows (bot name / admin / storage options) ────────────────────
     $('#infoBotName').textContent  = health.bot || '–';
     $('#infoBotAdmin').textContent = health.username ? '@' + health.username : '–';
-    
+
     // Bind Storage Parameters Directly From JSON Object Keys
     $('#infoUsedStorage').textContent = stats.used_storage || '–';
     $('#infoFreeStorage').textContent = stats.free_storage || '–';
@@ -268,7 +292,7 @@ async function loadStats(forceRefresh = false) {
     if (promoPanel) {
       const promoText = (stats.latest_promo_text || '').trim();
       if (promoText) {
-        promoPanel.innerHTML = promoText; 
+        promoPanel.innerHTML = promoText;
       } else {
         promoPanel.innerHTML = '<div class="ad-loading">No promotions at the moment.</div>';
       }
@@ -334,20 +358,12 @@ function closeSheet() {
   }, 280);
 }
 
-function escHtml(s) {
-  return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
 async function getFile(isSendAll = false) {
   let targetId;
   let isProtected = false;
-  
+
   if (isSendAll) {
-     targetId = state.query; 
+     targetId = state.query;
      if (!targetId) return;
   } else {
      const file = state.currentFile;
@@ -359,7 +375,7 @@ async function getFile(isSendAll = false) {
 
   const actionBtn = isSendAll ? document.getElementById('sendAllBtn') : document.querySelector('.btn-primary');
   const originalText = actionBtn ? actionBtn.innerHTML : '📥 Get File';
-  
+
   if (actionBtn) {
       actionBtn.innerHTML = '🔄 Processing...';
       actionBtn.disabled = true;
@@ -368,6 +384,8 @@ async function getFile(isSendAll = false) {
   }
 
   try {
+    const { user_id: nativeUserId, init_data } = getTelegramIdentity();
+
     const response = await fetch(`${BASE_URL}/api/send_file`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -375,7 +393,8 @@ async function getFile(isSendAll = false) {
         file_id: targetId,
         is_send_all: isSendAll,
         protect: isProtected,
-        init_data: tg?.initData || "" 
+        user_id: nativeUserId || "",
+        init_data: init_data || ""
       })
     });
 
@@ -389,12 +408,12 @@ async function getFile(isSendAll = false) {
           buttons: [{ id: "ok", type: "default", text: "OK, Got It!" }]
         });
       } else {
-        alert("𝐂𝐡𝐞𝐜𝐤 𝐘𝐨𝐮𝐫 𝐏𝐫𝐢𝐯𝐚 t𝐞 𝐦𝐞𝐬𝐬𝐚𝐠𝐞, 𝐈 𝐡𝐚𝐯𝐞 𝐬𝐞𝐧𝐭 𝐟𝐢𝐥𝐞𝐬 𝐢𝐧 𝐩𝐦.");
+        alert("𝐂𝐡𝐞𝐜𝐤 𝐘𝐨𝐮𝐫 𝐏𝐫𝐢𝐯𝐚𝐭𝐞 𝐦𝐞𝐬𝐬𝐚𝐠𝐞, 𝐈 𝐡𝐚𝐯𝐞 𝐬𝐞𝐧𝐭 𝐟𝐢𝐥𝐞𝐬 𝐢𝐧 𝐩𝐦.");
       }
       if (!isSendAll) closeSheet();
       return;
     }
-    
+
     if (tg) {
       const prefix = isSendAll ? "allfiles" : "get";
       tg.openTelegramLink(`https://t.me/Rashmi_v2_bot?start=${prefix}_${targetId}`);
@@ -445,7 +464,7 @@ document.querySelectorAll('.tab').forEach(btn => {
     $('#tab-' + tab)?.classList.add('active');
 
     if (tab === 'recent') loadRecent();
-    if (tab === 'stats')  loadStats(false); 
+    if (tab === 'stats')  loadStats(false);
   });
 });
 
@@ -493,7 +512,7 @@ loadMoreBtn.addEventListener('click', () => doSearch(false));
 sheetOverlay.addEventListener('click', closeSheet);
 
 document.getElementById('refreshStatsBtn')?.addEventListener('click', () => {
-  loadStats(true); 
+  loadStats(true);
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────
@@ -518,7 +537,7 @@ const themeToggleBtn = document.getElementById('themeToggleBtn');
 
 function initTheme() {
   const savedTheme = localStorage.getItem('user-theme');
-  
+
   if (savedTheme) {
     if (savedTheme === 'light') {
       document.body.classList.add('light-theme');
@@ -550,7 +569,7 @@ function initTheme() {
 if (themeToggleBtn) {
   themeToggleBtn.addEventListener('click', () => {
     document.body.classList.toggle('light-theme');
-    
+
     if (document.body.classList.contains('light-theme')) {
       localStorage.setItem('user-theme', 'light');
     } else {
