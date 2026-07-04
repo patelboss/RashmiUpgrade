@@ -3,26 +3,56 @@
    Passes data directly back to the active chat screen using the WebApp SDK.
 ────────────────────────────────────────────────────────────────────────── */
 
-console.log("Initializing AutoFile Mini-App Client Layer...");
+console.log("[BOOT] Initializing AutoFile Mini-App Client Layer...");
 
-// ── Telegram Web App SDK init ─────────────────────────────────────────────
 const tg = window.Telegram?.WebApp;
+
+function clientLog(...args) {
+  console.log("[WEBAPP]", ...args);
+}
+
+function clientWarn(...args) {
+  console.warn("[WEBAPP]", ...args);
+}
+
+function clientError(...args) {
+  console.error("[WEBAPP]", ...args);
+}
+
+function getTelegramIdentity() {
+  const nativeUserId = tg?.initDataUnsafe?.user?.id || "";
+  const initData = tg?.initData || "";
+  return {
+    user_id: nativeUserId,
+    init_data: initData
+  };
+}
+
+function logTelegramIdentity(stage) {
+  const identity = getTelegramIdentity();
+  clientLog(`[იდენტ:${stage}] initData length = ${identity.init_data ? identity.init_data.length : 0}`);
+  clientLog(`[იდენტ:${stage}] user_id =`, identity.user_id || "");
+  clientLog(`[იდენტ:${stage}] initDataUnsafe.user =`, tg?.initDataUnsafe?.user || undefined);
+  clientLog(`[იდენტ:${stage}] initData raw =`, identity.init_data || "");
+}
+
 if (tg) {
-  console.log("Telegram Web App Environment detected. Syncing layout parameters...");
+  clientLog("Telegram Web App Environment detected. Syncing layout parameters...");
   tg.ready();
   tg.expand();
   tg.enableClosingConfirmation?.();
   tg.setHeaderColor?.('bg_color');
-  console.log("SDK state initialized. Client InitData:", tg.initData);
+  clientLog("SDK state initialized.");
+  logTelegramIdentity("BOOT");
 } else {
-  console.warn("Running platform layout outside localized Telegram client context.");
+  clientWarn("Running platform layout outside localized Telegram client context.");
 }
 
-// ── Base URL of the aiohttp server (same origin as the Web App) ───────────
 const BASE_URL = window.location.origin;
-console.log("API endpoint pointer configured to origin root: " + BASE_URL);
+clientLog("API endpoint pointer configured to origin root:", BASE_URL);
+clientLog("Current page URL:", window.location.href);
+clientLog("Document readyState:", document.readyState);
 
-// ── State ─────────────────────────────────────────────────────────────────
 const state = {
   query:      '',
   fileType:   '',
@@ -35,7 +65,6 @@ const state = {
   currentFile: null,
 };
 
-// ── DOM refs ──────────────────────────────────────────────────────────────
 const $ = (sel) => document.querySelector(sel);
 const searchInput   = $('#searchInput');
 const clearBtn      = $('#clearBtn');
@@ -52,7 +81,6 @@ const sheetOverlay  = $('#sheetOverlay');
 const bottomSheet   = $('#bottomSheet');
 const sheetContent  = $('#sheetContent');
 
-// ── Utilities ─────────────────────────────────────────────────────────────
 function fmt(bytes) {
   if (!bytes || bytes === 0) return '–';
   const b = Number(bytes);
@@ -94,7 +122,10 @@ function thumbClass(type) {
 
 function debounce(fn, delay = 400) {
   let t;
-  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), delay); };
+  return (...args) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn(...args), delay);
+  };
 }
 
 function showFeedback(text = '✓') {
@@ -123,27 +154,17 @@ function escHtml(s) {
     .replace(/"/g, '&quot;');
 }
 
-function getTelegramIdentity() {
-  const nativeUserId = tg?.initDataUnsafe?.user?.id || "";
-  const initData = tg?.initData || "";
-  return {
-    user_id: nativeUserId,
-    init_data: initData
-  };
-}
-
-// ── API helpers ───────────────────────────────────────────────────────────
 async function apiFetch(path) {
-  console.log(`Executing remote asynchronous fetch path: ${path}`);
+  clientLog("[FETCH] request path =", path);
   const res = await fetch(BASE_URL + path);
+  clientLog("[FETCH] response", { path, status: res.status, ok: res.ok });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
 
-// ── Render a file card ────────────────────────────────────────────────────
 function renderCard(file) {
-  const type    = (file.file_type || '').toLowerCase().replace('messages.', '');
-  const card    = document.createElement('div');
+  const type = (file.file_type || '').toLowerCase().replace('messages.', '');
+  const card = document.createElement('div');
   card.className = 'file-card';
   card.innerHTML = `
     <div class="file-thumb ${thumbClass(type)}">${typeEmoji(type)}</div>
@@ -161,20 +182,35 @@ function renderCard(file) {
   return card;
 }
 
-// ── Search ────────────────────────────────────────────────────────────────
 async function doSearch(reset = true) {
   const trimmedQuery = state.query.trim();
-  if (!trimmedQuery) return;
-  if (trimmedQuery.length < 3) {
-    console.log(`Search skipped because query is too short: "${trimmedQuery}"`);
+  clientLog("[SEARCH] doSearch invoked", {
+    reset,
+    query: state.query,
+    trimmedQuery,
+    fileType: state.fileType,
+    offset: state.offset,
+    pageSize: state.pageSize,
+    loading: state.loading
+  });
+
+  logTelegramIdentity("SEARCH-BEFORE");
+
+  if (!trimmedQuery) {
+    clientWarn("[SEARCH] skipped: empty query");
     return;
   }
-  if (state.loading) return;
-
-  console.log(`Initiating file lookup execution stack. Target Query: "${state.query}" | ResetState: ${reset}`);
+  if (trimmedQuery.length < 3) {
+    clientWarn(`[SEARCH] skipped: query too short -> "${trimmedQuery}"`);
+    return;
+  }
+  if (state.loading) {
+    clientWarn("[SEARCH] skipped: already loading");
+    return;
+  }
 
   if (reset) {
-    state.offset  = 0;
+    state.offset = 0;
     state.results = [];
     resultsGrid.innerHTML = '';
     loadMoreBtn.classList.add('hidden');
@@ -189,24 +225,32 @@ async function doSearch(reset = true) {
     const { user_id: nativeUserId, init_data } = getTelegramIdentity();
 
     const params = new URLSearchParams({
-      q:         state.query,
-      offset:    state.offset,
-      max:       state.pageSize,
-      user_id:   nativeUserId || "",
+      q: state.query,
+      offset: state.offset,
+      max: state.pageSize,
+      user_id: nativeUserId || "",
       init_data: init_data || ""
     });
 
     if (state.fileType) params.set('type', state.fileType);
 
-    console.log("Search request params:", params.toString());
+    clientLog("[SEARCH] sending params =", params.toString());
+    clientLog("[SEARCH] sending identity snapshot =", {
+      user_id: nativeUserId || "",
+      init_data_length: init_data ? init_data.length : 0
+    });
 
     const data = await apiFetch(`/api/search?${params}`);
     const files = data.files || [];
 
-    console.log(`Successfully fetched search results. Count parsed: ${files.length}`);
+    clientLog("[SEARCH] response payload summary =", {
+      files_count: files.length,
+      total_results: data.total_results,
+      next_offset: data.next_offset
+    });
 
     state.results = state.results.concat(files);
-    state.offset  = typeof data.next_offset === 'number' ? data.next_offset : state.offset + files.length;
+    state.offset = typeof data.next_offset === 'number' ? data.next_offset : state.offset + files.length;
     state.hasMore = !!data.next_offset;
 
     files.forEach(f => resultsGrid.appendChild(renderCard(f)));
@@ -222,22 +266,23 @@ async function doSearch(reset = true) {
     loadMoreBtn.classList.toggle('hidden', !state.hasMore);
     loadMoreBtn.textContent = 'Load more';
   } catch (err) {
-    console.error('Search API execution failure context:', err);
+    clientError('[SEARCH] API execution failure context:', err);
     searchStatus.textContent = 'Search unavailable – try again';
     searchStatus.classList.remove('hidden');
     loadMoreBtn.classList.add('hidden');
   } finally {
     state.loading = false;
+    clientLog("[SEARCH] doSearch finished. loading =", state.loading);
   }
 }
 
 const debouncedSearch = debounce(() => {
+  clientLog("[SEARCH] debouncedSearch fired with query =", state.query);
   if (state.query.trim().length >= 3) doSearch();
 }, 380);
 
-// ── Recent files ──────────────────────────────────────────────────────────
 async function loadRecent() {
-  console.log("Loading recent media file arrays...");
+  clientLog("[RECENT] loadRecent invoked");
   recentLoader.classList.remove('hidden');
   recentEmpty.classList.add('hidden');
   recentGrid.innerHTML = '';
@@ -247,22 +292,23 @@ async function loadRecent() {
     const files = data.files || [];
     recentCount.textContent = files.length;
 
+    clientLog("[RECENT] response file count =", files.length);
+
     if (files.length === 0) {
       recentEmpty.classList.remove('hidden');
     } else {
       files.forEach(f => recentGrid.appendChild(renderCard(f)));
     }
   } catch (err) {
-    console.error("Failed to load recent files array mapping:", err);
+    clientError("[RECENT] failed:", err);
     recentEmpty.classList.remove('hidden');
   } finally {
     recentLoader.classList.add('hidden');
   }
 }
 
-// ── About / Stats View ────────────────────────────────────────────────────
 async function loadStats(forceRefresh = false) {
-  console.log(`Requesting dynamic instance stats. Forced Refresh: ${forceRefresh}`);
+  clientLog("[STATS] loadStats invoked", { forceRefresh });
 
   const refreshBtn = $('#refreshStatsBtn');
   if (forceRefresh && refreshBtn) {
@@ -275,30 +321,27 @@ async function loadStats(forceRefresh = false) {
       apiFetch(`/api/stats${forceRefresh ? '?refresh=true' : ''}`),
     ]);
 
-    // ── Stat cards (total_files + subscriber_count) ───────────────────────
+    clientLog("[STATS] health response =", health);
+    clientLog("[STATS] stats response =", stats);
+
     $('#statFiles').textContent = (stats.total_files ?? '–').toLocaleString();
     $('#statSubs').textContent  = (stats.subscriber_count ?? '–').toLocaleString();
 
-    // ── Info rows (bot name / admin / storage options) ────────────────────
     $('#infoBotName').textContent  = health.bot || '–';
     $('#infoBotAdmin').textContent = health.username ? '@' + health.username : '–';
 
-    // Bind Storage Parameters Directly From JSON Object Keys
     $('#infoUsedStorage').textContent = stats.used_storage || '–';
     $('#infoFreeStorage').textContent = stats.free_storage || '–';
 
-    // ── Latest promo text → #promoAdPanel (Parses HTML formatting nodes) ──
     const promoPanel = $('#promoAdPanel');
     if (promoPanel) {
       const promoText = (stats.latest_promo_text || '').trim();
-      if (promoText) {
-        promoPanel.innerHTML = promoText;
-      } else {
-        promoPanel.innerHTML = '<div class="ad-loading">No promotions at the moment.</div>';
-      }
+      promoPanel.innerHTML = promoText
+        ? promoText
+        : '<div class="ad-loading">No promotions at the moment.</div>';
     }
   } catch (err) {
-    console.error("Metric dashboard loading failure logged:", err);
+    clientError("[STATS] loading failure:", err);
     ['statFiles', 'statSubs', 'infoUsedStorage', 'infoFreeStorage'].forEach(id => {
       const el = $('#' + id);
       if (el) el.textContent = '–';
@@ -314,11 +357,15 @@ async function loadStats(forceRefresh = false) {
   }
 }
 
-// ── Bottom sheet ──────────────────────────────────────────────────────────
 function openSheet(file) {
   state.currentFile = file;
   const type = (file.file_type || '').toLowerCase().replace('messages.', '');
-  console.log("Opening bottom interaction sheet context for target file database object ID:", file._id || file.file_id);
+  clientLog("[SHEET] openSheet for file =", {
+    file_id: file._id || file.file_id,
+    file_name: file.file_name,
+    file_type: file.file_type,
+    mime_type: file.mime_type
+  });
 
   sheetContent.innerHTML = `
     <div class="sheet-file-name">${typeEmoji(type)} ${escHtml(file.file_name || 'Untitled')}</div>
@@ -337,7 +384,7 @@ function openSheet(file) {
         <span class="sheet-row-val" style="font-size:.72rem">${escHtml(file.mime_type)}</span>
       </div>` : ''}
     </div>
-    ${file.caption ? `<div class="sheet-caption">${escHtml(file.file_name)}</div>` : ''}
+    ${file.caption ? `<div class="sheet-caption">${escHtml(file.caption)}</div>` : ''}
     <div class="sheet-actions">
       <button class="btn-primary" onclick="getFile()">📥 Get File</button>
       <button class="btn-secondary" onclick="closeSheet()">Close</button>
@@ -350,6 +397,7 @@ function openSheet(file) {
 }
 
 function closeSheet() {
+  clientLog("[SHEET] closeSheet invoked");
   bottomSheet.classList.remove('open');
   setTimeout(() => {
     bottomSheet.classList.add('hidden');
@@ -363,28 +411,50 @@ async function getFile(isSendAll = false) {
   let isProtected = false;
 
   if (isSendAll) {
-     targetId = state.query;
-     if (!targetId) return;
+    targetId = state.query;
+    if (!targetId) {
+      clientWarn("[SEND_FILE] skipped: isSendAll but no query available");
+      return;
+    }
   } else {
-     const file = state.currentFile;
-     if (!file) return;
-     targetId = file._id || file.file_id;
-     const cb = document.getElementById('protectContentCb');
-     if (cb) isProtected = cb.checked;
+    const file = state.currentFile;
+    if (!file) {
+      clientWarn("[SEND_FILE] skipped: no current file selected");
+      return;
+    }
+    targetId = file._id || file.file_id;
+    const cb = document.getElementById('protectContentCb');
+    if (cb) isProtected = cb.checked;
   }
 
   const actionBtn = isSendAll ? document.getElementById('sendAllBtn') : document.querySelector('.btn-primary');
   const originalText = actionBtn ? actionBtn.innerHTML : '📥 Get File';
 
+  clientLog("[SEND_FILE] getFile invoked", {
+    isSendAll,
+    targetId,
+    isProtected
+  });
+
+  logTelegramIdentity("SEND-BEFORE");
+
   if (actionBtn) {
-      actionBtn.innerHTML = '🔄 Processing...';
-      actionBtn.disabled = true;
-      actionBtn.style.opacity = '0.7';
-      actionBtn.style.pointerEvents = 'none';
+    actionBtn.innerHTML = '🔄 Processing...';
+    actionBtn.disabled = true;
+    actionBtn.style.opacity = '0.7';
+    actionBtn.style.pointerEvents = 'none';
   }
 
   try {
     const { user_id: nativeUserId, init_data } = getTelegramIdentity();
+
+    clientLog("[SEND_FILE] request body snapshot =", {
+      file_id: targetId,
+      is_send_all: isSendAll,
+      protect: isProtected,
+      user_id: nativeUserId || "",
+      init_data_length: init_data ? init_data.length : 0
+    });
 
     const response = await fetch(`${BASE_URL}/api/send_file`, {
       method: 'POST',
@@ -400,7 +470,14 @@ async function getFile(isSendAll = false) {
 
     const resData = await response.json();
 
+    clientLog("[SEND_FILE] response =", {
+      status: response.status,
+      ok: response.ok,
+      body: resData
+    });
+
     if (response.ok && resData.status === 'direct_sent') {
+      clientLog("[SEND_FILE] direct_sent confirmed");
       if (tg && tg.showPopup) {
         tg.showPopup({
           title: "File Dispatched! 🚀",
@@ -416,33 +493,35 @@ async function getFile(isSendAll = false) {
 
     if (tg) {
       const prefix = isSendAll ? "allfiles" : "get";
+      clientWarn("[SEND_FILE] falling back to Telegram deep-link", { prefix, targetId });
       tg.openTelegramLink(`https://t.me/Rashmi_v2_bot?start=${prefix}_${targetId}`);
       tg.close();
     } else {
       navigator.clipboard?.writeText(`get_${targetId}`).then(() => showFeedback('Query token copied!'));
       if (!isSendAll) closeSheet();
     }
-
   } catch (err) {
-    console.error("Pipeline snag. Reverting to safe deep-link:", err);
+    clientError("[SEND_FILE] pipeline snag. Reverting to safe deep-link:", err);
     if (tg) {
       const prefix = isSendAll ? "allfiles" : "get";
       tg.openTelegramLink(`https://t.me/Rashmi_v2_bot?start=${prefix}_${targetId}`);
     }
   } finally {
     if (actionBtn) {
-        actionBtn.innerHTML = originalText;
-        actionBtn.disabled = false;
-        actionBtn.style.opacity = '1';
-        actionBtn.style.pointerEvents = 'auto';
+      actionBtn.innerHTML = originalText;
+      actionBtn.disabled = false;
+      actionBtn.style.opacity = '1';
+      actionBtn.style.pointerEvents = 'auto';
     }
+    clientLog("[SEND_FILE] getFile finished");
   }
 }
 
-window.getFile  = getFile;
+window.getFile = getFile;
 window.closeSheet = closeSheet;
 
 function quickSearch(q) {
+  clientLog("[SEARCH] quickSearch invoked with =", q);
   searchInput.value = q;
   state.query = q;
   clearBtn.style.display = '';
@@ -450,10 +529,10 @@ function quickSearch(q) {
 }
 window.quickSearch = quickSearch;
 
-// ── Tab switching ─────────────────────────────────────────────────────────
 document.querySelectorAll('.tab').forEach(btn => {
   btn.addEventListener('click', () => {
     const tab = btn.dataset.tab;
+    clientLog("[TAB] clicked =", tab);
     if (tab === state.activeTab) return;
     state.activeTab = tab;
 
@@ -468,9 +547,9 @@ document.querySelectorAll('.tab').forEach(btn => {
   });
 });
 
-// ── Filter chips ──────────────────────────────────────────────────────────
 document.querySelectorAll('.chip').forEach(chip => {
   chip.addEventListener('click', () => {
+    clientLog("[FILTER] chip selected =", chip.dataset.type);
     document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
     chip.classList.add('active');
     state.fileType = chip.dataset.type;
@@ -478,9 +557,9 @@ document.querySelectorAll('.chip').forEach(chip => {
   });
 });
 
-// ── Search input events ───────────────────────────────────────────────────
 searchInput.addEventListener('input', () => {
   state.query = searchInput.value;
+  clientLog("[SEARCH] input changed =", state.query);
   clearBtn.style.display = state.query ? '' : 'none';
 
   if (!state.query.trim()) {
@@ -497,6 +576,7 @@ searchInput.addEventListener('input', () => {
 });
 
 clearBtn.addEventListener('click', () => {
+  clientLog("[SEARCH] clear clicked");
   searchInput.value = '';
   state.query = '';
   clearBtn.style.display = 'none';
@@ -508,21 +588,28 @@ clearBtn.addEventListener('click', () => {
   searchInput.focus();
 });
 
-loadMoreBtn.addEventListener('click', () => doSearch(false));
+loadMoreBtn.addEventListener('click', () => {
+  clientLog("[SEARCH] load more clicked");
+  doSearch(false);
+});
+
 sheetOverlay.addEventListener('click', closeSheet);
 
 document.getElementById('refreshStatsBtn')?.addEventListener('click', () => {
+  clientLog("[STATS] refresh button clicked");
   loadStats(true);
 });
 
-// ── Init ──────────────────────────────────────────────────────────────────
 clearBtn.style.display = 'none';
 idleState.classList.remove('hidden');
 
 const initData = tg?.initDataUnsafe;
+clientLog("[BOOT] initDataUnsafe =", initData || {});
+clientLog("[BOOT] initData raw =", tg?.initData || "");
+
 if (initData?.start_param) {
   const q = decodeURIComponent(initData.start_param).replace(/_/g, ' ');
-  console.log(`Launch runtime contextual starting search parameter parameter hooked: "${q}"`);
+  clientLog(`Launch runtime contextual starting search parameter hooked: "${q}"`);
   if (q) {
     searchInput.value = q;
     state.query = q;
@@ -532,11 +619,11 @@ if (initData?.start_param) {
   }
 }
 
-// ── Automated Dynamic Theme Engine ──────────────────────────────────────────
 const themeToggleBtn = document.getElementById('themeToggleBtn');
 
 function initTheme() {
   const savedTheme = localStorage.getItem('user-theme');
+  clientLog("[THEME] initTheme", { savedTheme, telegramColorScheme: tg?.colorScheme });
 
   if (savedTheme) {
     if (savedTheme === 'light') {
@@ -548,7 +635,7 @@ function initTheme() {
   }
 
   if (tg && tg.colorScheme) {
-    console.log(`Telegram client color scheme detected: ${tg.colorScheme}`);
+    clientLog(`Telegram client color scheme detected: ${tg.colorScheme}`);
     if (tg.colorScheme === 'light') {
       document.body.classList.add('light-theme');
     } else {
@@ -558,7 +645,7 @@ function initTheme() {
   }
 
   const systemPrefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
-  console.log(`Fallback system environment configuration light mode profile match: ${systemPrefersLight}`);
+  clientLog(`Fallback system environment configuration light mode profile match: ${systemPrefersLight}`);
   if (systemPrefersLight) {
     document.body.classList.add('light-theme');
   } else {
@@ -569,17 +656,15 @@ function initTheme() {
 if (themeToggleBtn) {
   themeToggleBtn.addEventListener('click', () => {
     document.body.classList.toggle('light-theme');
-
-    if (document.body.classList.contains('light-theme')) {
-      localStorage.setItem('user-theme', 'light');
-    } else {
-      localStorage.setItem('user-theme', 'dark');
-    }
+    const current = document.body.classList.contains('light-theme') ? 'light' : 'dark';
+    localStorage.setItem('user-theme', current);
+    clientLog("[THEME] toggled to =", current);
   });
 }
 
 if (tg) {
   tg.onEvent('themeChanged', () => {
+    clientLog("[THEME] Telegram themeChanged event fired");
     if (!localStorage.getItem('user-theme')) {
       initTheme();
     }
