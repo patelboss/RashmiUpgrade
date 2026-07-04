@@ -77,11 +77,12 @@ async def api_search(request: web.Request) -> web.Response:
     max_res = min(int(request.rel_url.query.get("max", 15)), 50)
     file_type = request.rel_url.query.get("type", "") or None
 
-    # Pre-process strings exactly how your frontend expects them
+    # 1. Clean and sanitize the query string layout
     flattened = raw_q.replace("\n", " ").replace("\r", " ")
     alphanumeric_only = re.sub(r'[^a-zA-Z0-9\s]', ' ', flattened)
-    q = " ".join(alphanumeric_only.split())
+    q = " ".join(alphanumeric_only.split()).strip()
 
+    # Strict client defense guard check
     if not q or len(q) < 3:
         return web.json_response({"files": [], "total_results": 0, "next_offset": ""})
 
@@ -90,11 +91,9 @@ async def api_search(request: web.Request) -> web.Response:
         return web.json_response({"error": "Core framework offline"}, status=503)
 
     try:
-        # Use your target group's production ID context layout mapping
         DUMMY_CHAT_ID = -1001860020592
         mock_chat = type("MockChat", (object,), {"id": DUMMY_CHAT_ID, "type": ChatType.SUPERGROUP})()
         
-        # Build the mock incoming message object to trigger your native filtering
         mock_msg = type(
             "MockMessage",
             (object,),
@@ -106,26 +105,26 @@ async def api_search(request: web.Request) -> web.Response:
             }
         )()
 
-        # Execute your core, highly-optimized filtering logic directly
-        # This resolves missing characters, splits terms, handles custom captions, and tracks pagination
+        # 2. Run the native filter engine to populate split matching/typo corrections
         await auto_filter(bot_client, mock_msg)
 
-        # Retrieve the search metadata generated natively by your filtering run out of global memory
+        # 3. Pull the calculated results out of the application cache layer
         key = f"{DUMMY_CHAT_ID}-1"
-        search_query = temp.GETALL.get(key, [])
+        cached_results = temp.GETALL.get(key, [])
 
-        # Fallback query lookup execution if global memory tracking arrays are busy
-        if not search_query:
+        if cached_results:
+            # Clear layout path: slice out the exact page requested from the bot's memory array
+            files = cached_results[offset : offset + max_res]
+            total = len(cached_results)
+            next_offset = offset + len(files) if total > offset + max_res else ""
+        else:
+            # Fallback layout path: execute direct index match ONLY if the memory cache is empty
             files, next_offset, total = await get_search_results(
                 query=q.lower(),
                 file_type=file_type,
                 max_results=max_res,
                 offset=offset,
             )
-        else:
-            files = search_query[offset : offset + max_res]
-            total = len(search_query)
-            next_offset = offset + len(files) if total > offset + max_res else ""
 
         return web.json_response(
             {
