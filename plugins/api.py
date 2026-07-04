@@ -70,14 +70,20 @@ def _serialize_file(doc) -> dict:
 def _verify_and_extract_user(init_data: str) -> int | None:
     """Parses Telegram WebApp initData string context to safely extract the User ID."""
     if not init_data:
+        logger.info("ℹ️ [_verify_and_extract_user] No init_data string provided to parse.")
         return None
     try:
         params = dict(parse_qsl(init_data))
+        logger.info(f"📊 [_verify_and_extract_user] Raw parsed params keys: {list(params.keys())}")
+        
         if "user" in params:
             user_data = ujson.loads(params["user"])
+            logger.info(f"👤 [_verify_and_extract_user] Successfully found user dict object: {user_data}")
             return int(user_data.get("id"))
+            
+        logger.warning("⚠️ [_verify_and_extract_user] 'user' key missing from init_data parameters.")
     except Exception as e:
-        logger.warning("Failed to parse init_data validation fields: %s", e)
+        logger.warning("❌ Failed to parse init_data validation fields: %s", e)
     return None
 
 
@@ -91,21 +97,32 @@ async def api_search(request: web.Request) -> web.Response:
     offset = int(request.rel_url.query.get("offset", 0))
     max_res = min(int(request.rel_url.query.get("max", 15)), 50)
     file_type = request.rel_url.query.get("type", "") or None
+    
+    # 1. Capture BOTH potential identification parameters from the URL query string
+    url_user_id = request.rel_url.query.get("user_id", "").strip()
     raw_init_data = request.rel_url.query.get("init_data", "")
 
-    # 1. Process and clean the query string format exactly like the chat engine does
+    # 2. Process and clean the search text formatting
     flattened = raw_q.replace("\n", " ").replace("\r", " ")
     alphanumeric_only = re.sub(r'[^a-zA-Z0-9\s]', ' ', flattened)
     q = " ".join(alphanumeric_only.split()).strip()
 
-    # 🔍 DYNAMIC LOGGING TRACE FOR SEARCH IDENTITIES
-    extracted_id = _verify_and_extract_user(raw_init_data)
+    # 3. Dynamic multi-tier identity evaluation matching
+    active_user_id = None
     
-    # Use your real admin ID sequence as the primary internal safety net fallback
-    fallback_id = int(ADMINS[0]) if ADMINS else 1169128654 
-    active_user_id = extracted_id if extracted_id else fallback_id
-    
-    logger.info(f"🔍 [SEARCH] Raw Query: '{raw_q}' | Extracted User ID: {extracted_id} | Final Active Peer ID: {active_user_id}")
+    if url_user_id.isdigit():
+        active_user_id = int(url_user_id)
+        logger.info(f"🎯 [SEARCH] Found direct numeric user_id parameter in URL: {active_user_id}")
+    else:
+        extracted_id = _verify_and_extract_user(raw_init_data)
+        if extracted_id:
+            active_user_id = extracted_id
+            logger.info(f"🔑 [SEARCH] Extracted user_id from init_data token: {active_user_id}")
+
+    # Fallback to structural database configuration list rules if both layers failed
+    if not active_user_id:
+        active_user_id = int(ADMINS[0]) if ADMINS else 1169128654
+        logger.info(f"🛡️ [SEARCH] No user session found. Applying safe database cache fallback ID: {active_user_id}")
 
     # ✅ THE BULLETPROOF GUARD: Drop the request immediately if it's too short or contains only symbols
     if not q or len(q) < 3:
@@ -120,7 +137,6 @@ async def api_search(request: web.Request) -> web.Response:
         DUMMY_CHAT_ID = -1001860020592
         mock_chat = type("MockChat", (object,), {"id": DUMMY_CHAT_ID, "type": ChatType.SUPERGROUP})()
         
-        # Define an empty async placeholder to handle auto_filter response dispatches safely
         async def dummy_reply(*args, **kwargs):
             return type("DummySentMessage", (object,), {"id": 1})()
 
@@ -130,9 +146,8 @@ async def api_search(request: web.Request) -> web.Response:
             {
                 "id": 1,
                 "chat": mock_chat,
-                "text": q,  # Pass the securely cleaned alphanumeric string
-                "from_user": type("MockUser", (object,), {"id": active_user_id})(),
-                # Attached dummy methods intercept native bot replies without execution crashes
+                "text": q,
+                "from_user": type("MockUser", (object,), {"id": active_user_id})(), # ✅ Correctly mapped!
                 "reply_text": dummy_reply,
                 "reply_photo": dummy_reply,
                 "reply": dummy_reply
@@ -152,7 +167,6 @@ async def api_search(request: web.Request) -> web.Response:
             next_offset = offset + len(files) if total > offset + max_res else ""
             logger.info(f"✨ Search serving from cache matrix framework memory! Found {total} items.")
         else:
-            # ✅ SAFETY FIX: If falling back, pass the CLEANED lower-case 'q', NEVER the raw_q with symbols
             files, next_offset, total = await get_search_results(
                 query=q.lower(),
                 file_type=file_type,
