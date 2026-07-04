@@ -18,7 +18,9 @@ import re
 import sys
 import ujson
 from urllib.parse import parse_qsl
+
 from aiohttp import web
+
 from plugins.subs_cmd import get_channel_subscriber_count
 from info import AUTH_CHANNEL
 from database.ia_filterdb import Media, get_search_results
@@ -39,7 +41,9 @@ stdout_handler.setLevel(logging.INFO)
 formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 stdout_handler.setFormatter(formatter)
 logger.addHandler(stdout_handler)
-
+logger.info("=" * 70)
+logger.info("api.py loaded successfully")
+logger.info("=" * 70)
 api_routes = web.RouteTableDef()
 
 # ── Global stats cache ───────────────────────────────────────────────────────
@@ -81,6 +85,26 @@ def _verify_and_extract_user(init_data: str) -> int | None:
     return None
 
 
+def _clean_search_query(raw_q: str) -> str:
+    """
+    Clean query the same way the chat engine should see it:
+    - collapse newlines
+    - remove punctuation/symbol noise
+    - keep spaces for multi-word searches
+    """
+    flattened = (raw_q or "").replace("\n", " ").replace("\r", " ")
+    alphanumeric_only = re.sub(r"[^a-zA-Z0-9\s]", " ", flattened)
+    return " ".join(alphanumeric_only.split()).strip()
+
+
+def _meaningful_char_count(q: str) -> int:
+    """
+    Count only letters/numbers, ignoring spaces.
+    This lets 'game of thrones' pass, but rejects '*c', 'a', 'ab', 'a b', etc.
+    """
+    return len(re.sub(r"[^a-zA-Z0-9]", "", q or ""))
+
+
 # ── 🚀 UNIFIED WEB SEARCH THROUGH REAL CHAT AUTOFILTERS ───────────────────
 @api_routes.get("/api/search")
 async def api_search(request: web.Request) -> web.Response:
@@ -88,21 +112,38 @@ async def api_search(request: web.Request) -> web.Response:
     from plugins.pm_filter import auto_filter
 
     raw_q = request.rel_url.query.get("q", "").strip()
-    offset = int(request.rel_url.query.get("offset", 0))
-    max_res = min(int(request.rel_url.query.get("max", 15)), 50)
+
+    try:
+        offset = max(0, int(request.rel_url.query.get("offset", 0)))
+    except Exception:
+        offset = 0
+
+    try:
+        max_res = min(max(1, int(request.rel_url.query.get("max", 15))), 50)
+    except Exception:
+        max_res = 15
+
     file_type = request.rel_url.query.get("type", "") or None
 
-    # 1. Process and clean the query string format exactly like the chat engine does
-    flattened = raw_q.replace("\n", " ").replace("\r", " ")
-    alphanumeric_only = re.sub(r'[^a-zA-Z0-9\s]', ' ', flattened)
-    q = " ".join(alphanumeric_only.split()).strip()
+    # 1. Clean query
+    q = _clean_search_query(raw_q)
+    q_char_count = _meaningful_char_count(q)
 
-    # ✅ ALWAYS SEEN LOGGING TRACE: This will show up clearly in your terminal output streams
-    logger.info(f"Incoming Search Request -> Raw: '{raw_q}' | Cleaned Match: '{q}'")
+    logger.info(
+        "Incoming Search Request -> Raw: '%s' | Cleaned: '%s' | MeaningfulChars: %s",
+        raw_q,
+        q,
+        q_char_count,
+    )
 
-    # ✅ THE BULLETPROOF GUARD: Drop the request immediately if it's too short or contains only symbols
-    if not q or len(q) < 3:
-        logger.warning(f"⚠️ WebApp Search Rejected Early. Raw: '{raw_q}' dropped because Cleaned: '{q}' is too short.")
+    # 2. Reject short / junk queries before touching filter paths
+    if not q or q_char_count < 3:
+        logger.warning(
+            "⚠️ WebApp Search Rejected Early. Raw: '%s' | Cleaned: '%s' | MeaningfulChars: %s",
+            raw_q,
+            q,
+            q_char_count,
+        )
         return web.json_response({"files": [], "total_results": 0, "next_offset": ""})
 
     bot_client = request.app.get("bot_client")
@@ -112,7 +153,7 @@ async def api_search(request: web.Request) -> web.Response:
     try:
         DUMMY_CHAT_ID = -1001860020592
         mock_chat = type("MockChat", (object,), {"id": DUMMY_CHAT_ID, "type": ChatType.SUPERGROUP})()
-        
+
         mock_msg = type(
             "MockMessage",
             (object,),
@@ -120,31 +161,31 @@ async def api_search(request: web.Request) -> web.Response:
                 "id": 1,
                 "chat": mock_chat,
                 "text": q,
-                "from_user": type("MockUser", (object,), {"id": 0})()
+                "from_user": type("MockUser", (object,), {"id": 0})(),
             }
         )()
 
-        # 2. Execute your core chat filtering
+        # 3. Execute your core chat filtering
         await auto_filter(bot_client, mock_msg)
 
-        # 3. Pull from cache layer
+        # 4. Pull from cache layer
         key = f"{DUMMY_CHAT_ID}-1"
         cached_results = temp.GETALL.get(key, [])
 
         if cached_results:
-            files = cached_results[offset : offset + max_res]
+            files = cached_results[offset: offset + max_res]
             total = len(cached_results)
             next_offset = offset + len(files) if total > offset + max_res else ""
-            logger.info(f"✨ Search serving from cache matrix framework memory! Found {total} items.")
+            logger.info("✨ Search serving from cache matrix framework memory! Found %s items.", total)
         else:
-            # ✅ SAFETY FIX: If falling back, pass the CLEANED lower-case 'q', NEVER the raw_q with symbols
+            # Fall back to MongoDB using the cleaned query, preserving spaces
             files, next_offset, total = await get_search_results(
                 query=q.lower(),
                 file_type=file_type,
                 max_results=max_res,
                 offset=offset,
             )
-            logger.info(f"📁 Cache expired. Dispatched lookup straight to MongoDB. Results: {total}")
+            logger.info("📁 Cache expired. Dispatched lookup straight to MongoDB. Results: %s", total)
 
         return web.json_response(
             {
@@ -157,9 +198,14 @@ async def api_search(request: web.Request) -> web.Response:
         logger.exception("Unified Filter Search API error for query '%s': %s", q, exc)
         return web.json_response({"error": "Search failed"}, status=500)
 
+
 @api_routes.get("/api/recent")
 async def api_recent(request: web.Request) -> web.Response:
-    max_res = min(int(request.rel_url.query.get("max", 20)), 50)
+    try:
+        max_res = min(max(1, int(request.rel_url.query.get("max", 20))), 50)
+    except Exception:
+        max_res = 20
+
     try:
         cursor = Media.find({}).sort("$natural", -1).limit(max_res)
         files = await cursor.to_list(length=max_res)
@@ -239,7 +285,7 @@ async def api_send_file(request: web.Request) -> web.Response:
         raw_file_id = payload.get("file_id")
         user_id = payload.get("user_id")
         init_data = payload.get("init_data")
-        
+
         is_protected = bool(payload.get("protect", False))
 
         if not user_id:
@@ -253,19 +299,19 @@ async def api_send_file(request: web.Request) -> web.Response:
 
         DUMMY_CHAT_ID = -1001860020592
         mock_chat = type("MockChat", (object,), {"id": DUMMY_CHAT_ID, "type": ChatType.SUPERGROUP})()
-        
+
         async def mock_reply_func(*args, **kwargs):
             text_content = args if args else "Action processed."
             return await bot_client.send_message(chat_id=user_id, text=text_content)
 
         mock_msg = type(
-            "MockMessage", 
-            (object,), 
+            "MockMessage",
+            (object,),
             {
                 "id": 1,
                 "chat": mock_chat,
-                "delete": lambda *args, **kwargs: asyncio.sleep(0), 
-                "reply": mock_reply_func
+                "delete": lambda *args, **kwargs: asyncio.sleep(0),
+                "reply": mock_reply_func,
             }
         )()
 
@@ -281,8 +327,8 @@ async def api_send_file(request: web.Request) -> web.Response:
                 "from_user": mock_user,
                 "message": mock_msg,
                 "data": f"{prefix}#{raw_file_id}",
-                "answer": lambda *args, **kwargs: asyncio.sleep(0), 
-                "edit_message_reply_markup": lambda *args, **kwargs: asyncio.sleep(0)
+                "answer": lambda *args, **kwargs: asyncio.sleep(0),
+                "edit_message_reply_markup": lambda *args, **kwargs: asyncio.sleep(0),
             }
         )()
 
