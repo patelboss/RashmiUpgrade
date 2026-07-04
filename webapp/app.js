@@ -164,10 +164,12 @@ async function doSearch(reset = true) {
   loadMoreBtn.textContent = 'Loading…';
 
   try {
+    // ✅ PASS INTERACTIVE AUTH DATA STRINGS DYNAMICALLY
     const params = new URLSearchParams({
       q:         state.query,
       offset:    state.offset,
       max:       state.pageSize,
+      init_data: window.Telegram?.WebApp?.initData || ""
     });
     if (state.fileType) params.set('type', state.fileType);
 
@@ -337,8 +339,6 @@ function escHtml(s) {
     .replace(/"/g, '&quot;');
 }
 
-// ── ✅ UPDATED: Native Direct Background Dispatch with showPopup ───────────
-// ── ✅ UPDATED: Native Direct Background Dispatch with showPopup & Spam Protection ──
 async function getFile(isSendAll = false) {
   let targetId;
   let isProtected = false;
@@ -357,7 +357,6 @@ async function getFile(isSendAll = false) {
   const actionBtn = isSendAll ? document.getElementById('sendAllBtn') : document.querySelector('.btn-primary');
   const originalText = actionBtn ? actionBtn.innerHTML : '📥 Get File';
   
-  // ✅ FIX: Lock the button so the user cannot spam click it
   if (actionBtn) {
       actionBtn.innerHTML = '🔄 Processing...';
       actionBtn.disabled = true;
@@ -380,7 +379,6 @@ async function getFile(isSendAll = false) {
     const resData = await response.json();
 
     if (response.ok && resData.status === 'direct_sent') {
-      // ✅ TRIGGER THE NATIVE POPUP DIALOG INSTANTLY
       if (tg && tg.showPopup) {
         tg.showPopup({
           title: "File Dispatched! 🚀",
@@ -394,7 +392,6 @@ async function getFile(isSendAll = false) {
       return;
     }
     
-    // Fallback to deep link redirection
     if (tg) {
       const prefix = isSendAll ? "allfiles" : "get";
       tg.openTelegramLink(`https://t.me/Rashmi_v2_bot?start=${prefix}_${targetId}`);
@@ -411,7 +408,6 @@ async function getFile(isSendAll = false) {
       tg.openTelegramLink(`https://t.me/Rashmi_v2_bot?start=${prefix}_${targetId}`);
     }
   } finally {
-    // ✅ FIX: Unlock the button if the user stays on the screen
     if (actionBtn) {
         actionBtn.innerHTML = originalText;
         actionBtn.disabled = false;
@@ -446,7 +442,7 @@ document.querySelectorAll('.tab').forEach(btn => {
     $('#tab-' + tab)?.classList.add('active');
 
     if (tab === 'recent') loadRecent();
-    if (tab === 'stats')  loadStats(false); // Serve cached version by default
+    if (tab === 'stats')  loadStats(false); 
   });
 });
 
@@ -493,9 +489,8 @@ clearBtn.addEventListener('click', () => {
 loadMoreBtn.addEventListener('click', () => doSearch(false));
 sheetOverlay.addEventListener('click', closeSheet);
 
-// ── Manual Refresh Data Trigger ──────────────────────────────────────────
 document.getElementById('refreshStatsBtn')?.addEventListener('click', () => {
-  loadStats(true); // Forces backend cache flush
+  loadStats(true); 
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────
