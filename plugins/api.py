@@ -16,9 +16,12 @@ import datetime
 import logging
 import re
 import sys
+import traceback
 import ujson
 from urllib.parse import parse_qsl
+
 from aiohttp import web
+
 from plugins.subs_cmd import get_channel_subscriber_count
 from info import AUTH_CHANNEL, ADMINS
 from database.ia_filterdb import Media, get_search_results
@@ -42,14 +45,40 @@ logger.addHandler(stdout_handler)
 
 api_routes = web.RouteTableDef()
 
-# ── Global stats cache ───────────────────────────────────────────────────────
 _STATS_CACHE = None
 _CACHE_EXPIRE_TIME = None
 _STATS_LOCK = asyncio.Lock()
 
 
+def _safe_format(message: str, *args) -> str:
+    try:
+        return message % args if args else message
+    except Exception:
+        return f"{message} | args={args}"
+
+
+def _emit(level: int, message: str, *args, exc_info: bool = False) -> None:
+    text = _safe_format(message, *args)
+    ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    line = f"{ts} - api_hub - {logging.getLevelName(level)} - {text}"
+    print(line, flush=True)
+    logger.log(level, text, exc_info=exc_info)
+
+
+def _emit_exception(message: str, *args) -> None:
+    text = _safe_format(message, *args)
+    ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"{ts} - api_hub - ERROR - {text}", flush=True)
+    traceback.print_exc()
+    logger.exception(text)
+
+
+_emit(logging.INFO, "=" * 72)
+_emit(logging.INFO, "api.py imported successfully from: %s", __file__)
+_emit(logging.INFO, "=" * 72)
+
+
 def _serialize_file(doc) -> dict:
-    """Convert a uMongo document or raw dict to a plain JSON-serialisable dict."""
     if hasattr(doc, "to_mongo"):
         raw = doc.to_mongo()
     elif hasattr(doc, "__iter__"):
@@ -68,75 +97,94 @@ def _serialize_file(doc) -> dict:
 
 
 def _verify_and_extract_user(init_data: str) -> int | None:
-    """Parses Telegram WebApp initData string context to safely extract the User ID."""
     if not init_data:
-        logger.info("ℹ️ [_verify_and_extract_user] No init_data string provided to parse.")
+        _emit(logging.INFO, "[_verify_and_extract_user] No init_data string provided to parse.")
         return None
     try:
         params = dict(parse_qsl(init_data))
-        logger.info(f"📊 [_verify_and_extract_user] Raw parsed params keys: {list(params.keys())}")
-        
+        _emit(logging.INFO, "[_verify_and_extract_user] Raw parsed params keys: %s", list(params.keys()))
+
         if "user" in params:
             user_data = ujson.loads(params["user"])
-            logger.info(f"👤 [_verify_and_extract_user] Successfully found user dict object: {user_data}")
+            _emit(logging.INFO, "[_verify_and_extract_user] Successfully found user dict object: %s", user_data)
             return int(user_data.get("id"))
-            
-        logger.warning("⚠️ [_verify_and_extract_user] 'user' key missing from init_data parameters.")
+
+        _emit(logging.WARNING, "[_verify_and_extract_user] 'user' key missing from init_data parameters.")
     except Exception as e:
-        logger.warning("❌ Failed to parse init_data validation fields: %s", e)
+        _emit(logging.WARNING, "Failed to parse init_data validation fields: %s", e)
     return None
 
 
-# ── 🚀 UNIFIED WEB SEARCH THROUGH REAL CHAT AUTOFILTERS ───────────────────
+def _clean_search_query(raw_q: str) -> str:
+    flattened = (raw_q or "").replace("\n", " ").replace("\r", " ")
+    alphanumeric_only = re.sub(r"[^a-zA-Z0-9\s]", " ", flattened)
+    return " ".join(alphanumeric_only.split()).strip()
+
+
 @api_routes.get("/api/search")
 async def api_search(request: web.Request) -> web.Response:
     from pyrogram.enums import ChatType
     from plugins.pm_filter import auto_filter
 
     raw_q = request.rel_url.query.get("q", "").strip()
-    offset = int(request.rel_url.query.get("offset", 0))
-    max_res = min(int(request.rel_url.query.get("max", 15)), 50)
+
+    try:
+        offset = max(0, int(request.rel_url.query.get("offset", 0)))
+    except Exception:
+        offset = 0
+
+    try:
+        max_res = min(max(1, int(request.rel_url.query.get("max", 15))), 50)
+    except Exception:
+        max_res = 15
+
     file_type = request.rel_url.query.get("type", "") or None
-    
-    # 1. Capture BOTH potential identification parameters from the URL query string
     url_user_id = request.rel_url.query.get("user_id", "").strip()
     raw_init_data = request.rel_url.query.get("init_data", "")
 
-    # 2. Process and clean the search text formatting
-    flattened = raw_q.replace("\n", " ").replace("\r", " ")
-    alphanumeric_only = re.sub(r'[^a-zA-Z0-9\s]', ' ', flattened)
-    q = " ".join(alphanumeric_only.split()).strip()
+    _emit(
+        logging.INFO,
+        "[SEARCH] incoming request -> path_qs=%s | raw_q=%r | offset=%s | max=%s | type=%r | user_id=%r | init_data_len=%s",
+        request.path_qs,
+        raw_q,
+        offset,
+        max_res,
+        file_type,
+        url_user_id,
+        len(raw_init_data or ""),
+    )
 
-    # 3. Dynamic multi-tier identity evaluation matching
+    q = _clean_search_query(raw_q)
+    _emit(logging.INFO, "[SEARCH] cleaned query = %r | meaningful chars = %s", q, len(re.sub(r"[^a-zA-Z0-9]", "", q or "")))
+
     active_user_id = None
-    
+
     if url_user_id.isdigit():
         active_user_id = int(url_user_id)
-        logger.info(f"🎯 [SEARCH] Found direct numeric user_id parameter in URL: {active_user_id}")
+        _emit(logging.INFO, "[SEARCH] Found direct numeric user_id parameter in URL: %s", active_user_id)
     else:
         extracted_id = _verify_and_extract_user(raw_init_data)
         if extracted_id:
             active_user_id = extracted_id
-            logger.info(f"🔑 [SEARCH] Extracted user_id from init_data token: {active_user_id}")
+            _emit(logging.INFO, "[SEARCH] Extracted user_id from init_data token: %s", active_user_id)
 
-    # Fallback to structural database configuration list rules if both layers failed
     if not active_user_id:
         active_user_id = int(ADMINS[0]) if ADMINS else 1169128654
-        logger.info(f"🛡️ [SEARCH] No user session found. Applying safe database cache fallback ID: {active_user_id}")
+        _emit(logging.WARNING, "[SEARCH] No user session found. Applying safe database cache fallback ID: %s", active_user_id)
 
-    # ✅ THE BULLETPROOF GUARD: Drop the request immediately if it's too short or contains only symbols
     if not q or len(q) < 3:
-        logger.warning(f"⚠️ WebApp Search Rejected Early. Raw: '{raw_q}' dropped because Cleaned: '{q}' is too short.")
+        _emit(logging.WARNING, "[SEARCH] rejected early. Raw=%r Cleaned=%r is too short.", raw_q, q)
         return web.json_response({"files": [], "total_results": 0, "next_offset": ""})
 
     bot_client = request.app.get("bot_client")
     if not bot_client:
+        _emit(logging.ERROR, "[SEARCH] Core framework offline (bot_client missing).")
         return web.json_response({"error": "Core framework offline"}, status=503)
 
     try:
         DUMMY_CHAT_ID = -1001860020592
         mock_chat = type("MockChat", (object,), {"id": DUMMY_CHAT_ID, "type": ChatType.SUPERGROUP})()
-        
+
         async def dummy_reply(*args, **kwargs):
             return type("DummySentMessage", (object,), {"id": 1})()
 
@@ -147,25 +195,26 @@ async def api_search(request: web.Request) -> web.Response:
                 "id": 1,
                 "chat": mock_chat,
                 "text": q,
-                "from_user": type("MockUser", (object,), {"id": active_user_id})(), # ✅ Correctly mapped!
+                "from_user": type("MockUser", (object,), {"id": active_user_id})(),
                 "reply_text": dummy_reply,
                 "reply_photo": dummy_reply,
-                "reply": dummy_reply
+                "reply": dummy_reply,
             }
         )()
 
-        # 2. Execute your core chat filtering
+        _emit(logging.INFO, "[SEARCH] calling auto_filter with from_user.id=%s and text=%r", active_user_id, q)
         await auto_filter(bot_client, mock_msg)
 
-        # 3. Pull from cache layer
         key = f"{DUMMY_CHAT_ID}-1"
         cached_results = temp.GETALL.get(key, [])
 
+        _emit(logging.INFO, "[SEARCH] cache key=%s | cached_results_count=%s", key, len(cached_results) if cached_results else 0)
+
         if cached_results:
-            files = cached_results[offset : offset + max_res]
+            files = cached_results[offset: offset + max_res]
             total = len(cached_results)
             next_offset = offset + len(files) if total > offset + max_res else ""
-            logger.info(f"✨ Search serving from cache matrix framework memory! Found {total} items.")
+            _emit(logging.INFO, "[SEARCH] serving from cache. total=%s | returned=%s | next_offset=%r", total, len(files), next_offset)
         else:
             files, next_offset, total = await get_search_results(
                 query=q.lower(),
@@ -173,7 +222,7 @@ async def api_search(request: web.Request) -> web.Response:
                 max_results=max_res,
                 offset=offset,
             )
-            logger.info(f"📁 Cache expired. Dispatched lookup straight to MongoDB. Results: {total}")
+            _emit(logging.INFO, "[SEARCH] MongoDB fallback finished. total=%s | returned=%s | next_offset=%r", total, len(files), next_offset)
 
         return web.json_response(
             {
@@ -183,24 +232,30 @@ async def api_search(request: web.Request) -> web.Response:
             }
         )
     except Exception as exc:
-        logger.exception("Unified Filter Search API error for query '%s': %s", q, exc)
+        _emit_exception("Unified Filter Search API error for query %r: %s", q, exc)
         return web.json_response({"error": "Search failed"}, status=500)
 
 
 @api_routes.get("/api/recent")
 async def api_recent(request: web.Request) -> web.Response:
-    max_res = min(int(request.rel_url.query.get("max", 20)), 50)
+    try:
+        max_res = min(max(1, int(request.rel_url.query.get("max", 20))), 50)
+    except Exception:
+        max_res = 20
+
+    _emit(logging.INFO, "[RECENT] request -> path_qs=%s | max=%s", request.path_qs, max_res)
+
     try:
         cursor = Media.find({}).sort("$natural", -1).limit(max_res)
         files = await cursor.to_list(length=max_res)
+        _emit(logging.INFO, "[RECENT] returning %s files", len(files))
         return web.json_response({"files": [_serialize_file(f) for f in files]})
     except Exception as exc:
-        logger.exception("Recent API error: %s", exc)
+        _emit_exception("Recent API error: %s", exc)
         return web.json_response({"error": "Failed to load recent files"}, status=500)
 
 
 async def _fetch_and_cache_stats(bot_client) -> None:
-    """Fetch fresh data from DB and store it in RAM until midnight."""
     global _STATS_CACHE, _CACHE_EXPIRE_TIME
 
     total_files = await Media.count_documents({})
@@ -208,7 +263,7 @@ async def _fetch_and_cache_stats(bot_client) -> None:
     total_chats = await users_db.total_chat_count()
 
     subscriber_count = await get_channel_subscriber_count(bot_client, AUTH_CHANNEL)
-    logger.info("AUTH_CHANNEL=%s | subscriber_count=%s", AUTH_CHANNEL, subscriber_count)
+    _emit(logging.INFO, "AUTH_CHANNEL=%s | subscriber_count=%s", AUTH_CHANNEL, subscriber_count)
     latest_promo_text = "Comming Soon 🔜"
 
     try:
@@ -217,7 +272,7 @@ async def _fetch_and_cache_stats(bot_client) -> None:
         used_storage = get_size(size)
         free_storage = get_size(free)
     except Exception as e:
-        logger.warning("Storage size calculation failed: %s", e, exc_info=True)
+        _emit(logging.WARNING, "Storage size calculation failed: %s", e, exc_info=True)
         used_storage, free_storage = "–", "–"
 
     _STATS_CACHE = {
@@ -237,6 +292,15 @@ async def _fetch_and_cache_stats(bot_client) -> None:
         datetime.time.min,
     )
 
+    _emit(
+        logging.INFO,
+        "Stats cache refreshed. files=%s users=%s chats=%s expires_at=%s",
+        total_files,
+        total_users,
+        total_chats,
+        _CACHE_EXPIRE_TIME.isoformat(timespec="seconds"),
+    )
+
 
 @api_routes.get("/api/stats")
 async def api_stats(request: web.Request) -> web.Response:
@@ -247,15 +311,19 @@ async def api_stats(request: web.Request) -> web.Response:
 
     bot_client = request.app.get("bot_client")
     if not bot_client:
+        _emit(logging.ERROR, "[STATS] Core framework offline (bot_client missing).")
         return web.json_response({"error": "Core framework offline"}, status=503)
 
     try:
         async with _STATS_LOCK:
             if force_refresh or not _STATS_CACHE or not _CACHE_EXPIRE_TIME or now >= _CACHE_EXPIRE_TIME:
+                _emit(logging.INFO, "[STATS] cache miss/refresh requested. force_refresh=%s", force_refresh)
                 await _fetch_and_cache_stats(bot_client)
+            else:
+                _emit(logging.INFO, "[STATS] cache hit. using cached payload.")
         return web.json_response(_STATS_CACHE)
     except Exception as exc:
-        logger.exception("Cached Stats API error: %s", exc)
+        _emit_exception("Cached Stats API error: %s", exc)
         return web.json_response({"error": "Stats unavailable"}, status=500)
 
 
@@ -266,40 +334,50 @@ async def api_send_file(request: web.Request) -> web.Response:
         from plugins.pm_filter import cb_handler
 
         payload = await request.json()
+        _emit(logging.INFO, "[SEND_FILE] incoming JSON keys: %s", list(payload.keys()))
+
         raw_file_id = payload.get("file_id")
         user_id = payload.get("user_id")
         init_data = payload.get("init_data")
-        
         is_protected = bool(payload.get("protect", False))
+
+        _emit(
+            logging.INFO,
+            "[SEND_FILE] payload snapshot -> file_id=%r | user_id=%r | init_data_len=%s | protect=%s | is_send_all=%s",
+            raw_file_id,
+            user_id,
+            len(init_data or ""),
+            is_protected,
+            payload.get("is_send_all"),
+        )
 
         if not user_id:
             user_id = _verify_and_extract_user(init_data)
 
         if not user_id:
+            _emit(logging.WARNING, "[SEND_FILE] rejected: user_id missing and init_data could not be parsed.")
             return web.json_response({"status": "redirect_required"}, status=200)
 
         user_id = int(user_id)
-        
-        # 🔍 DYNAMIC LOGGING TRACE FOR DISPATCH IDENTITIES
-        logger.info(f"📥 [SEND_FILE] Requested File ID: '{raw_file_id}' | Final Destination User ID: {user_id}")
+        _emit(logging.INFO, "[SEND_FILE] Final destination user_id=%s", user_id)
 
         bot_client = request.app.get("bot_client")
 
         DUMMY_CHAT_ID = -1001860020592
         mock_chat = type("MockChat", (object,), {"id": DUMMY_CHAT_ID, "type": ChatType.SUPERGROUP})()
-        
+
         async def mock_reply_func(*args, **kwargs):
             text_content = args if args else "Action processed."
             return await bot_client.send_message(chat_id=user_id, text=text_content)
 
         mock_msg = type(
-            "MockMessage", 
-            (object,), 
+            "MockMessage",
+            (object,),
             {
                 "id": 1,
                 "chat": mock_chat,
-                "delete": lambda *args, **kwargs: asyncio.sleep(0), 
-                "reply": mock_reply_func
+                "delete": lambda *args, **kwargs: asyncio.sleep(0),
+                "reply": mock_reply_func,
             }
         )()
 
@@ -315,16 +393,21 @@ async def api_send_file(request: web.Request) -> web.Response:
                 "from_user": mock_user,
                 "message": mock_msg,
                 "data": f"{prefix}#{raw_file_id}",
-                "answer": lambda *args, **kwargs: asyncio.sleep(0), 
-                "edit_message_reply_markup": lambda *args, **kwargs: asyncio.sleep(0)
+                "answer": lambda *args, **kwargs: asyncio.sleep(0),
+                "edit_message_reply_markup": lambda *args, **kwargs: asyncio.sleep(0),
             }
         )()
 
-        logger.info("Forwarding mock WebApp event payload straight to pm_filter.cb_handler -> User: %s", user_id)
+        _emit(
+            logging.INFO,
+            "[SEND_FILE] forwarding to cb_handler -> user_id=%s | data=%r",
+            user_id,
+            f"{prefix}#{raw_file_id}",
+        )
         asyncio.create_task(cb_handler(bot_client, mock_query))
 
         return web.json_response({"status": "direct_sent"}, status=200)
 
     except Exception as global_exc:
-        logger.exception("Global pipeline exception caught inside forwarding proxy route layout: %s", global_exc)
+        _emit_exception("Global pipeline exception caught inside forwarding proxy route layout: %s", global_exc)
         return web.json_response({"status": "redirect_required"}, status=200)
