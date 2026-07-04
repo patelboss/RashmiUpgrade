@@ -20,7 +20,7 @@ import ujson
 from urllib.parse import parse_qsl
 from aiohttp import web
 from plugins.subs_cmd import get_channel_subscriber_count
-from info import AUTH_CHANNEL
+from info import AUTH_CHANNEL, ADMINS
 from database.ia_filterdb import Media, get_search_results
 from database.users_chats_db import db as users_db
 from utils import get_size, temp
@@ -98,7 +98,14 @@ async def api_search(request: web.Request) -> web.Response:
     alphanumeric_only = re.sub(r'[^a-zA-Z0-9\s]', ' ', flattened)
     q = " ".join(alphanumeric_only.split()).strip()
 
-    logger.info(f"Incoming Search Request -> Raw: '{raw_q}' | Cleaned Match: '{q}'")
+    # 🔍 DYNAMIC LOGGING TRACE FOR SEARCH IDENTITIES
+    extracted_id = _verify_and_extract_user(raw_init_data)
+    
+    # Use your real admin ID sequence as the primary internal safety net fallback
+    fallback_id = int(ADMINS[0]) if ADMINS else 1169128654 
+    active_user_id = extracted_id if extracted_id else fallback_id
+    
+    logger.info(f"🔍 [SEARCH] Raw Query: '{raw_q}' | Extracted User ID: {extracted_id} | Final Active Peer ID: {active_user_id}")
 
     # ✅ THE BULLETPROOF GUARD: Drop the request immediately if it's too short or contains only symbols
     if not q or len(q) < 3:
@@ -116,10 +123,6 @@ async def api_search(request: web.Request) -> web.Response:
         # Define an empty async placeholder to handle auto_filter response dispatches safely
         async def dummy_reply(*args, **kwargs):
             return type("DummySentMessage", (object,), {"id": 1})()
-
-        # ✅ EXTRACT THE TRUE USER SESSION ID CONTEXT
-        extracted_id = _verify_and_extract_user(raw_init_data)
-        active_user_id = extracted_id if extracted_id else 555000444
 
         mock_msg = type(
             "MockMessage",
@@ -262,6 +265,10 @@ async def api_send_file(request: web.Request) -> web.Response:
             return web.json_response({"status": "redirect_required"}, status=200)
 
         user_id = int(user_id)
+        
+        # 🔍 DYNAMIC LOGGING TRACE FOR DISPATCH IDENTITIES
+        logger.info(f"📥 [SEND_FILE] Requested File ID: '{raw_file_id}' | Final Destination User ID: {user_id}")
+
         bot_client = request.app.get("bot_client")
 
         DUMMY_CHAT_ID = -1001860020592
