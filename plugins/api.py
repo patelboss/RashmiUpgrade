@@ -124,6 +124,9 @@ async def api_search(request: web.Request) -> web.Response:
         max_res = 15
 
     file_type = request.rel_url.query.get("type", "") or None
+    init_data = request.rel_url.query.get("init_data", "")
+    user_id = _verify_and_extract_user(init_data) or 0
+    logger.info("WebApp Search User resolved: %s", user_id )
 
     # 1. Clean query
     q = _clean_search_query(raw_q)
@@ -161,7 +164,8 @@ async def api_search(request: web.Request) -> web.Response:
                 "id": 1,
                 "chat": mock_chat,
                 "text": q,
-                "from_user": type("MockUser", (object,), {"id": 0})(),
+                #"from_user": type("MockUser", (object,), {"id": 0})(),
+                "from_user": type( "MockUser", (object,),{ "id": user_id, "first_name": "WebApp User" })(), 
             }
         )()
 
