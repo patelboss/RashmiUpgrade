@@ -23,7 +23,7 @@ python-Levenshtein>=0.23.0
 # IMDB
 git+https://github.com/Joelkb/cinemagoer
 #cinemagoer>=2023.5.1
-SQLAlchemy==1.4.54
+#SQLAlchemy==1.4.54
 
 # Utilities
 shortzy>=0.0.8
