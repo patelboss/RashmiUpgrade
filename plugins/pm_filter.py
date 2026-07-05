@@ -1368,9 +1368,15 @@ async def mongo_spell_fallback(query: str, limit: int = 250) -> list[dict]:
     Lightweight MongoDB fallback for spell checking.
 
     Returns:
-        List[dict] where each item has at least:
-            {"title": "..."}
+        IMDb-like list:
+        [
+            {
+                "title": "...",
+                "year": "2023" | None
+            }
+        ]
     """
+
     if not query:
         return []
 
@@ -1392,7 +1398,9 @@ async def mongo_spell_fallback(query: str, limit: int = 250) -> list[dict]:
             )
             .limit(limit)
         )
+
         docs = await cursor.to_list(length=limit)
+
     except Exception as e:
         logger.exception("mongo_spell_fallback failed: %s", e)
         return []
@@ -1413,30 +1421,54 @@ async def mongo_spell_fallback(query: str, limit: int = 250) -> list[dict]:
         re.IGNORECASE | re.VERBOSE,
     )
 
+    YEAR_PATTERN = re.compile(r"\b((?:19|20)\d{2})\b")
+
     seen = set()
-    candidates: list[dict] = []
+    candidates = []
 
     for doc in docs:
         try:
             name = clean_file_name(getattr(doc, "file_name", "") or "").strip()
+
             if not name:
                 continue
 
+            # Remove extension
             name = re.sub(r"\.[A-Za-z0-9]{2,5}$", "", name)
-            name = re.sub(r"[._\-]+", " ", name)
-            name = re.sub(r"[\[\]\(\)\{\}]", " ", name)
-            name = REMOVE_PATTERN.sub("", name)
-            name = " ".join(name.split()).strip()
 
-            if len(name) < 3:
+            # Normalize separators
+            name = re.sub(r"[._\-]+", " ", name)
+
+            # Extract year BEFORE removing it
+            year_match = YEAR_PATTERN.search(name)
+            year = year_match.group(1) if year_match else None
+
+            # Remove year from title
+            title = YEAR_PATTERN.sub("", name)
+
+            # Remove quality / codec tags
+            title = REMOVE_PATTERN.sub("", title)
+
+            # Remove brackets
+            title = re.sub(r"[\[\]\(\)\{\}]", " ", title)
+
+            # Compress spaces
+            title = " ".join(title.split()).strip()
+
+            if len(title) < 3:
                 continue
 
-            key = name.lower()
+            key = title.lower()
+
             if key in seen:
                 continue
 
             seen.add(key)
-            candidates.append({"title": name})
+
+            candidates.append({
+                "title": title,
+                "year": year
+            })
 
         except Exception:
             continue
@@ -1452,14 +1484,16 @@ async def mongo_spell_fallback(query: str, limit: int = 250) -> list[dict]:
 
     if DEBUG_MODE:
         logger.info(
-            "[SPELL] mongo_spell_fallback(%r) -> %d cleaned titles | sample=%s",
+            "[SPELL] mongo_spell_fallback(%r) -> %d candidates | sample=%s",
             query,
             len(candidates),
-            [item["title"] for item in candidates[:10]],
+            [
+                f"{m['title']} ({m['year']})" if m["year"] else m["title"]
+                for m in candidates[:10]
+            ],
         )
 
     return candidates
-
 
 async def advantage_spell_chok(client, msg, webapp=False):
     """Handles spell check for movie queries."""
