@@ -10,7 +10,7 @@ import os
 from aiohttp import web
 from utils import temp
 
-logger = logging.getLogger("Rashmibot.server")
+logger = logging.getLogger("Route.py")
 logger.setLevel(logging.INFO)
 
 routes = web.RouteTableDef()
