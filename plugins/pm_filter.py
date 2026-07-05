@@ -1210,7 +1210,7 @@ async def auto_filter(client, msg, spoll=False, webapp=False):
 
 
     else:
-		search, files, offset, total_results = spoll
+        search, files, offset, total_results = spoll
         if hasattr(msg, "message"):  # CallbackQuery
             settings = await get_settings(msg.message.chat.id)
             message = msg.message.reply_to_message
