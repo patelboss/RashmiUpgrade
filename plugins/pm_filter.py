@@ -1349,14 +1349,15 @@ async def auto_filter(client, msg, spoll=False, webapp=False):
             await message.reply_text(cap, reply_markup=InlineKeyboardMarkup(btn))
     else:
         await message.reply_text(cap, reply_markup=InlineKeyboardMarkup(btn))
+    # Use exactly 4 standard spaces here:
     if spoll:
+        # Use exactly 8 standard spaces here:
         if hasattr(msg, "message") and msg.message:
-			await msg.message.delete()
-		else:
-			await msg.delete()
-			
-
-
+            # Use exactly 12 standard spaces here:
+            await msg.message.delete()
+        else:
+            # Use exactly 12 standard spaces here:
+            await msg.delete()
 import asyncio
 import re
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
