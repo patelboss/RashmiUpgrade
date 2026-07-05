@@ -1684,82 +1684,112 @@ async def advantage_spell_chok(client, msg, webapp=False):
 from database.ia_filterdb import Media
 from utils import clean_file_name
 
+
 async def mongo_spell_fallback(query: str, limit: int = 250) -> list[str]:
-    """
-    Lightweight MongoDB fallback for spell checking.
-
-    Purpose:
-        - NOT to search/download files.
-        - Only collect possible movie names from nearby filenames.
-        - Used when IMDb returns no results.
-
-    Returns:
-        List[str] of unique candidate titles.
-    """
-
     if not query:
         return []
-
-    # First word usually gives the best candidate set.
-    keyword = query.split()[0]
-
+    # Search using every meaningful word instead of only the first one.
+    words = [w for w in query.split() if len(w) >= 3]
+    if not words:
+        words = [query]
+    regex = "|".join(re.escape(w) for w in words)
     try:
         cursor = (
             Media.find(
                 {
                     "file_name": {
-                        "$regex": re.escape(keyword),
+                        "$regex": regex,
                         "$options": "i",
                     }
                 }
             )
             .limit(limit)
         )
-
         docs = await cursor.to_list(length=limit)
-
     except Exception as e:
         logger.exception("mongo_spell_fallback failed: %s", e)
         return []
+    REMOVE_PATTERN = re.compile(
+        r"""
+        \b(
+            480p|720p|1080p|1440p|2160p|4k|
+            hdrip|webrip|web[- ]?dl|bluray|brrip|dvdrip|hdr|
+            x264|x265|h264|h265|hevc|av1|
+            aac|ac3|dd5\.?1|dts|atmos|
+            esub|proper|remux|uncut|extended|
+            dual\s*audio|multi\s*audio|
+            hindi|english|tamil|telugu|malayalam|kannada|
+            mkv|mp4|avi|m4v
+        )\b
+        """,
+        re.IGNORECASE | re.VERBOSE,
+    )
 
-    seen = set()
+    YEAR_PATTERN = re.compile(r"\b(19|20)\d{2}\b")
+
+    seen = {}
     candidates = []
 
     for doc in docs:
         try:
-            name = clean_file_name(doc.file_name).strip()
+            name = clean_file_name(doc.file_name)
 
             if not name:
                 continue
 
-            # Remove common quality tags.
-            name = re.sub(
-                r"\b(480p|720p|1080p|2160p|4K|HDRip|WEB[- ]?DL|WEBRip|BluRay|DVDRip|x264|x265|HEVC|AAC|ESub|Dual Audio|Hindi|English|Tamil|Telugu|Malayalam)\b",
-                "",
-                name,
-                flags=re.IGNORECASE,
-            )
+            # Remove file extension
+            name = re.sub(r"\.[A-Za-z0-9]{2,4}$", "", name)
 
-            name = " ".join(name.split())
+            # Normalize separators
+            name = re.sub(r"[._\-]+", " ", name)
+
+            # Remove quality / codec tags
+            name = REMOVE_PATTERN.sub("", name)
+
+            # Remove year
+            name = YEAR_PATTERN.sub("", name)
+
+            # Remove brackets
+            name = re.sub(r"[\[\]\(\)\{\}]", " ", name)
+
+            # Compress spaces
+            name = " ".join(name.split()).strip()
+
+            if len(name) < 3:
+                continue
 
             key = name.lower()
 
             if key in seen:
                 continue
 
-            seen.add(key)
+            seen[key] = True
             candidates.append(name)
 
         except Exception:
             continue
 
-    logger.info(
-        "mongo_spell_fallback('%s') -> %d candidate titles",
-        query,
-        len(candidates),
+    # Rank by similarity (better than plain ratio for movie names)
+    candidates.sort(
+        key=lambda title: (
+            fuzz.token_set_ratio(query.lower(), title.lower()),
+            fuzz.partial_ratio(query.lower(), title.lower()),
+            fuzz.ratio(query.lower(), title.lower()),
+        ),
+        reverse=True,
     )
 
+    if DEBUG_MODE:
+        logger.info(
+            "[SPELL] mongo_spell_fallback(%r) -> %d cleaned titles | sample=%s",
+            query,
+            len(candidates),
+            candidates[:10],
+        )
+
     return candidates
+
+
 async def manual_filters(client, message, text=False):
     group_id = message.chat.id
     name = text or message.text
