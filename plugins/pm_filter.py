@@ -1351,8 +1351,11 @@ async def auto_filter(client, msg, spoll=False, webapp=False):
         await message.reply_text(cap, reply_markup=InlineKeyboardMarkup(btn))
 
     #if spoll:
-       # await msg.message.delete(
+       # await msg.message.delete()
 
+   # if spoll:
+       # await msg.message.delete()
+            
 	if spoll:
         if hasattr(msg, "message") and msg.message:
             await msg.message.delete()
