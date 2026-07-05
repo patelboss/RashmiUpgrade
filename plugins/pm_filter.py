@@ -1361,6 +1361,12 @@ async def advantage_spell_chok(client, msg, webapp=False):
     mv_id = msg.id
     user_id = msg.from_user.id if msg.from_user else 0
 
+    if DEBUG_MODE:
+        logger.info(
+            "[SPELL] entered | msg_id=%s | user_id=%s | webapp=%s | raw_text=%r",
+            mv_id, user_id, webapp, getattr(msg, "text", None)
+        )
+
     if webapp:
         req_user = None
     else:
@@ -1376,14 +1382,24 @@ async def advantage_spell_chok(client, msg, webapp=False):
         flags=re.IGNORECASE
     ).strip()
     logger.info(f"Processed query in adv spell check: {cleaned_text}")
+    if DEBUG_MODE:
+        logger.info("[SPELL] after keyword strip -> %r", cleaned_text)
 
     flattened = cleaned_text.replace("\n", " ").replace("\r", " ")
     logger.info(f"Processed query in adv spell check: {flattened}")
+    if DEBUG_MODE:
+        logger.info("[SPELL] flattened -> %r", flattened)
+
     alphanumeric_only = re.sub(r'[^a-zA-Z0-9\s]', ' ', flattened)
     logger.info(f"Processed query in adv spell check: {alphanumeric_only}")
+    if DEBUG_MODE:
+        logger.info("[SPELL] alnum only -> %r", alphanumeric_only)
+
     query = " ".join(alphanumeric_only.split())
 
     if not query:
+        if DEBUG_MODE:
+            logger.info("[SPELL] query empty after cleanup; returning not_found")
         if webapp:
             return {
                 "status": "not_found",
@@ -1396,11 +1412,24 @@ async def advantage_spell_chok(client, msg, webapp=False):
         return
 
     logger.info(f"Processed query in adv spell check: {query}")
+    if DEBUG_MODE:
+        logger.info("[SPELL] normalized query -> %r | length=%s", query, len(query))
 
     try:
+        if DEBUG_MODE:
+            logger.info("[SPELL] calling get_poster(query=%r, bulk=True)", query)
         movies = await get_poster(query, bulk=True)
+        logger.info("SpellCheck IMDb returned: %s", len(movies) if movies else 0)
+
+        if DEBUG_MODE and movies:
+            logger.info(
+                "[SPELL] imdb titles sample -> %s",
+                [f"{m.get('title')} ({m.get('year')})" for m in movies[:10]]
+            )
 
         if not movies:
+            if DEBUG_MODE:
+                logger.info("[SPELL] get_poster returned no movies")
             search_query = query.replace(" ", "+")
             if webapp:
                 return {
@@ -1424,6 +1453,8 @@ async def advantage_spell_chok(client, msg, webapp=False):
 
     except Exception as e:
         logger.error(f"Error fetching movies for query '{query}': {e}")
+        if DEBUG_MODE:
+            logger.exception("[SPELL] get_poster failed")
         search_query = query.replace(" ", "+")
         if webapp:
             return {
@@ -1454,7 +1485,12 @@ async def advantage_spell_chok(client, msg, webapp=False):
         ]
     )
 
+    if DEBUG_MODE:
+        logger.info("[SPELL] movielist size=%s | sample=%s", len(movielist), movielist[:10])
+
     if not movielist:
+        if DEBUG_MODE:
+            logger.info("[SPELL] movielist empty after processing imdb results")
         search_query = query.replace(" ", "+")
         if webapp:
             return {
@@ -1480,15 +1516,32 @@ async def advantage_spell_chok(client, msg, webapp=False):
 
     try:
         matched_movie = None
+        best_ratio = -1
+
         for title in movielist:
             ratio = fuzz.ratio(query.lower(), title.lower())
-            logger.debug(f"Matching '{query}' with '{title}', Ratio: {ratio}")
+            if DEBUG_MODE:
+                logger.info("[SPELL] compare -> query=%r | title=%r | ratio=%s", query, title, ratio)
+            if ratio > best_ratio:
+                best_ratio = ratio
             if ratio > 60:
                 matched_movie = title
                 break
 
+        if DEBUG_MODE:
+            logger.info("[SPELL] best_ratio=%s | matched_movie=%r", best_ratio, matched_movie)
+
         if matched_movie:
             files, offset, total_results = await get_search_results(matched_movie.lower(), offset=0, filter=True)
+
+            if DEBUG_MODE:
+                logger.info(
+                    "[SPELL] matched movie search -> matched=%r | files=%s | offset=%r | total=%s",
+                    matched_movie,
+                    len(files) if files else 0,
+                    offset,
+                    total_results
+                )
 
             if webapp:
                 if files:
@@ -1512,8 +1565,13 @@ async def advantage_spell_chok(client, msg, webapp=False):
 
             if files:
                 await auto_filter(client, msg, (matched_movie, files, offset, total_results))
+                logger.info("SpellCheck matched movie: %s", matched_movie)
 
         else:
+            logger.info("SpellCheck found no fuzzy match above threshold.")
+            if DEBUG_MODE:
+                logger.info("[SPELL] suggestions fallback -> %s", movielist[:10])
+
             if webapp:
                 return {
                     "status": "suggestions",
@@ -1536,6 +1594,8 @@ async def advantage_spell_chok(client, msg, webapp=False):
 
     except Exception as e:
         logger.error(f"Error during spell check for query '{query}': {e}")
+        if DEBUG_MODE:
+            logger.exception("[SPELL] fuzzy matching or follow-up flow failed")
         if webapp:
             return {
                 "status": "not_found",
@@ -1552,6 +1612,10 @@ async def advantage_spell_chok(client, msg, webapp=False):
             for idx, movie in enumerate(movielist)
         ]
         buttons.append([InlineKeyboardButton("Close", callback_data=f'spolling#{user_id}#close_spellcheck')])
+
+        if DEBUG_MODE:
+            logger.info("[SPELL] sending inline suggestions count=%s", len(movielist))
+
         t = await msg.reply(
             f"<b>Here are some suggestions for **{query}**:</b>",
             reply_markup=InlineKeyboardMarkup(buttons)
@@ -1560,6 +1624,8 @@ async def advantage_spell_chok(client, msg, webapp=False):
         await t.delete()
     except Exception as e:
         logger.error(f"Error displaying movie suggestions for query '{query}': {e}")
+        if DEBUG_MODE:
+            logger.exception("[SPELL] suggestion message flow failed")
 
     if webapp:
         return {
@@ -1570,8 +1636,6 @@ async def advantage_spell_chok(client, msg, webapp=False):
             "total_results": 0,
             "next_offset": "",
         }
-
-
 
 async def manual_filters(client, message, text=False):
     group_id = message.chat.id
