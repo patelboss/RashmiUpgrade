@@ -1632,14 +1632,29 @@ async def advantage_spell_chok(client, msg, webapp=False):
     SPELL_CHECK[mv_id] = movielist
 
     try:
+		"""
         matched_movie = None
         for title in movielist:
             ratio = fuzz.ratio(query.lower(), title.lower())
             logger.debug(f"Matching '{query}' with '{title}', Ratio: {ratio}")
             if ratio > 60:
                 matched_movie = title
-                break
+				break
+		"""
+        matched_movie = None
+        best_ratio = 60  # Only accept matches strictly better than 60
+        for title in movielist:
 
+            ratio = fuzz.ratio(query.lower(), title.lower())
+            logger.debug(f"Matching '{query}' with '{title}', Ratio: {ratio}")
+            
+            if ratio > best_ratio:
+                best_ratio = ratio
+                matched_movie = title
+        
+                
+
+		
         if DEBUG_MODE:
             logger.info("[SPELL] matched_movie=%r", matched_movie)
 
