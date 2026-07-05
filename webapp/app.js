@@ -30,14 +30,14 @@ init_data: initData
 
 function logTelegramIdentity(stage) {
 const identity = getTelegramIdentity();
-clientLog("[IDENT:${stage}] initData length = ${identity.init_data ? identity.init_data.length : 0}");
-clientLog("[IDENT:${stage}] user_id =", identity.user_id || "");
-clientLog("[IDENT:${stage}] initDataUnsafe.user =", tg?.initDataUnsafe?.user || undefined);
-clientLog("[IDENT:${stage}] initData raw =", identity.init_data || "");
+clientLog("[IDENTITY:${stage}] initData length = ${identity.init_data ? identity.init_data.length : 0}");
+clientLog("[IDENTITY:${stage}] user_id =", identity.user_id || "");
+clientLog("[IDENTITY:${stage}] initDataUnsafe.user =", tg?.initDataUnsafe?.user || undefined);
+clientLog("[IDENTITY:${stage}] initData raw =", identity.init_data || "");
 }
 
 if (tg) {
-clientLog("Telegram Web App environment detected. Syncing layout parameters...");
+clientLog("Telegram Web App Environment detected. Syncing layout parameters...");
 tg.ready();
 tg.expand();
 tg.enableClosingConfirmation?.();
@@ -45,23 +45,26 @@ tg.setHeaderColor?.('bg_color');
 clientLog("SDK state initialized.");
 logTelegramIdentity("BOOT");
 } else {
-clientWarn("Running outside the Telegram client context.");
+clientWarn("Running platform layout outside localized Telegram client context.");
 }
 
 const BASE_URL = window.location.origin;
-clientLog("API endpoint configured to origin root:", BASE_URL);
+clientLog("API endpoint pointer configured to origin root:", BASE_URL);
 clientLog("Current page URL:", window.location.href);
 clientLog("Document readyState:", document.readyState);
+clientLog("[BOOT] initData raw at startup =", tg?.initData || "");
+clientLog("[BOOT] initDataUnsafe at startup =", tg?.initDataUnsafe || {});
+clientLog("[BOOT] initData length at startup =", (tg?.initData || "").length);
 
 const state = {
-query: '',
-fileType: '',
-offset: 0,
-pageSize: 15,
-loading: false,
-hasMore: false,
-results: [],
-activeTab: 'search',
+query:      '',
+fileType:   '',
+offset:     0,
+pageSize:   15,
+loading:    false,
+hasMore:    false,
+results:    [],
+activeTab:  'search',
 currentFile: null,
 };
 
@@ -84,8 +87,8 @@ const sheetContent  = $('#sheetContent');
 function fmt(bytes) {
 if (!bytes || bytes === 0) return '–';
 const b = Number(bytes);
-if (b < 1024) return b + ' B';
-if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
+if (b < 1024)       return b + ' B';
+if (b < 1048576)    return (b / 1024).toFixed(1) + ' KB';
 if (b < 1073741824) return (b / 1048576).toFixed(1) + ' MB';
 return (b / 1073741824).toFixed(2) + ' GB';
 }
@@ -103,10 +106,10 @@ return parts.join(' ');
 
 function typeEmoji(type) {
 switch (type) {
-case 'video': return '🎬';
-case 'audio': return '🎵';
+case 'video':    return '🎬';
+case 'audio':    return '🎵';
 case 'document': return '📄';
-default: return '📁';
+default:         return '📁';
 }
 }
 
@@ -450,11 +453,11 @@ if (response.ok && resData.status === 'direct_sent') {
   if (tg && tg.showPopup) {
     tg.showPopup({
       title: "File Dispatched! 🚀",
-      message: "Check your private messages. I have sent the file in PM.\n\nMinimize or close this window to access your media.",
+      message: "𝐂𝐡𝐞𝐜𝐤 𝐘𝐨𝐮𝐫 𝐏𝐫𝐢𝐯𝐚𝐭𝐞 𝐦𝐞𝐬𝐬𝐚𝐠𝐞, 𝐈 𝐡𝐚𝐯𝐞 𝐬𝐞𝐧𝐭 𝐟𝐢𝐥𝐞𝐬 𝐢𝐧 𝐩𝐦.\n\nMinimize or close this window to access your media.",
       buttons: [{ id: "ok", type: "default", text: "OK, Got It!" }]
     });
   } else {
-    alert("Check your private messages. I have sent the file in PM.");
+    alert("𝐂𝐡𝐞𝐜𝐤 𝐘𝐨𝐮𝐫 𝐏𝐫𝐢𝐯𝐚𝐭𝐞 𝐦𝐞𝐬𝐬𝐚𝐠𝐞, 𝐈 𝐡𝐚𝐯𝐞 𝐬𝐞𝐧𝐭 𝐟𝐢𝐥𝐞𝐬 𝐢𝐧 𝐩𝐦.");
   }
   if (!isSendAll) closeSheet();
   return;
@@ -513,7 +516,7 @@ document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'
 $('#tab-' + tab)?.classList.add('active');
 
 if (tab === 'recent') loadRecent();
-if (tab === 'stats') loadStats(false);
+if (tab === 'stats')  loadStats(false);
 
 });
 });
