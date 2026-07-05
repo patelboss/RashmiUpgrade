@@ -1012,7 +1012,7 @@ from fuzzywuzzy import fuzz  # Assuming fuzzywuzzy is used for spell-checking
 # Define required functions like get_poster, send_error_log, and others
 import logging
 async def advantage_spell_chok(client, msg):
-    """Handles spell check for movie queries."""
+
     mv_id = msg.id
     user_id = msg.from_user.id if msg.from_user else 0
     req_user = await client.get_users(user_id)
