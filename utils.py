@@ -4,7 +4,7 @@ from info import *
 from datetime import datetime, date
 import logging
 from pyrogram.errors import InputUserDeactivated, UserNotParticipant, FloodWait, UserIsBlocked, PeerIdInvalid
-from info import AUTH_CHANNEL, LONG_IMDB_DESCRIPTION, MAX_LIST_ELM
+#from info import AUTH_CHANNEL, LONG_IMDB_DESCRIPTION, MAX_LIST_ELM
 #from imdb import IMDb
 from variables import AUTH_CHANNELS
 import asyncio
