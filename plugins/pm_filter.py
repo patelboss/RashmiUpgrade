@@ -1367,31 +1367,38 @@ async def advantage_spell_chok(client, msg, webapp=False):
             mv_id, user_id, webapp, getattr(msg, "text", None)
         )
 
-    if webapp:
-        req_user = None
-    else:
-        req_user = await client.get_users(user_id)
-        logger.info(
-            f"Received spell check request from user {req_user.username or user_id} (User ID: {user_id})."
-        )
+    req_user = None
+    if not webapp and user_id:
+        try:
+            req_user = await client.get_users(user_id)
+            logger.info(
+                "Received spell check request from user %s (User ID: %s).",
+                req_user.username or user_id,
+                user_id
+            )
+        except Exception as e:
+            if DEBUG_MODE:
+                logger.exception("[SPELL] get_users failed for user_id=%s", user_id)
+            logger.warning("Could not resolve user info for spell check: %s", e)
 
     cleaned_text = re.sub(
         r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|movie(s)?|new|latest|br((o|u)h?)*|^h(e|a)?(l)*(o)*|mal(ayalam)?|t(h)?amil|file|that|find|und(o)*|kit(t(i|y)?)?o(w)?|thar(u)?(o)*w?|kittum(o)*|aya(k)*(um(o)*)?|full\smovie|any(one)|with\ssubtitle(s)?)",
         "",
-        msg.text,
+        msg.text or "",
         flags=re.IGNORECASE
     ).strip()
-    logger.info(f"Processed query in adv spell check: {cleaned_text}")
+
+    logger.info("Processed query in adv spell check: %s", cleaned_text)
     if DEBUG_MODE:
         logger.info("[SPELL] after keyword strip -> %r", cleaned_text)
 
     flattened = cleaned_text.replace("\n", " ").replace("\r", " ")
-    logger.info(f"Processed query in adv spell check: {flattened}")
+    logger.info("Processed query in adv spell check: %s", flattened)
     if DEBUG_MODE:
         logger.info("[SPELL] flattened -> %r", flattened)
 
-    alphanumeric_only = re.sub(r'[^a-zA-Z0-9\s]', ' ', flattened)
-    logger.info(f"Processed query in adv spell check: {alphanumeric_only}")
+    alphanumeric_only = re.sub(r"[^a-zA-Z0-9\s]", " ", flattened)
+    logger.info("Processed query in adv spell check: %s", alphanumeric_only)
     if DEBUG_MODE:
         logger.info("[SPELL] alnum only -> %r", alphanumeric_only)
 
@@ -1411,28 +1418,42 @@ async def advantage_spell_chok(client, msg, webapp=False):
             }
         return
 
-    logger.info(f"Processed query in adv spell check: {query}")
+    logger.info("Processed query in adv spell check: %s", query)
     if DEBUG_MODE:
         logger.info("[SPELL] normalized query -> %r | length=%s", query, len(query))
 
     try:
         if DEBUG_MODE:
             logger.info("[SPELL] calling get_poster(query=%r, bulk=True)", query)
-        #movies = await get_poster(query, bulk=True)
-        movies = await get_poster(query, bulk=True)
-        if not movies:
-            movies = await mongo_spell_fallback(query)
-        logger.info("SpellCheck IMDb returned: %s", len(movies) if movies else 0)
 
-        if DEBUG_MODE and movies:
-            logger.info(
-                "[SPELL] imdb titles sample -> %s",
-                [f"{m.get('title')} ({m.get('year')})" for m in movies[:10]]
-            )
+        movies = await get_poster(query, bulk=True)
+        from_mongo = False
 
         if not movies:
             if DEBUG_MODE:
-                logger.info("[SPELL] get_poster returned no movies")
+                logger.info("[SPELL] IMDb returned no movies, trying mongo_spell_fallback(query=%r)", query)
+            from_mongo = True
+            movies = await mongo_spell_fallback(query) or []
+
+        logger.info(
+            "SpellCheck %s returned: %s",
+            "Mongo fallback" if from_mongo else "IMDb",
+            len(movies) if movies else 0
+        )
+
+        if DEBUG_MODE and movies:
+            if from_mongo:
+                logger.info("[SPELL] mongo candidates -> %s", movies[:10])
+            else:
+                logger.info(
+                    "[SPELL] imdb titles -> %s",
+                    [f"{m.get('title')} ({m.get('year')})" for m in movies[:10] if isinstance(m, dict)]
+                )
+
+        if not movies:
+            if DEBUG_MODE:
+                logger.info("[SPELL] no movies found from IMDb or mongo fallback")
+
             search_query = query.replace(" ", "+")
             if webapp:
                 return {
@@ -1455,9 +1476,10 @@ async def advantage_spell_chok(client, msg, webapp=False):
             return
 
     except Exception as e:
-        logger.error(f"Error fetching movies for query '{query}': {e}")
+        logger.error("Error fetching movies for query '%s': %s", query, e)
         if DEBUG_MODE:
-            logger.exception("[SPELL] get_poster failed")
+            logger.exception("[SPELL] get_poster / mongo fallback failed")
+
         search_query = query.replace(" ", "+")
         if webapp:
             return {
@@ -1479,21 +1501,42 @@ async def advantage_spell_chok(client, msg, webapp=False):
         )
         return
 
-    movielist = (
-        [movie.get('title') for movie in movies if movie.get('title')]
-        + [
-            f"{movie.get('title')} {movie.get('year')}"
-            for movie in movies
-            if movie.get('title') and movie.get('year')
-        ]
-    )
+    if from_mongo:
+        movielist = []
+        for item in movies:
+            if isinstance(item, str):
+                title = item.strip()
+                if title:
+                    movielist.append(title)
+            elif isinstance(item, dict):
+                title = (item.get("title") or item.get("name") or "").strip()
+                year = str(item.get("year") or "").strip()
+                if title:
+                    movielist.append(title)
+                    if year:
+                        movielist.append(f"{title} {year}")
+    else:
+        movielist = []
+        for movie in movies:
+            if not isinstance(movie, dict):
+                continue
+            title = (movie.get("title") or "").strip()
+            year = str(movie.get("year") or "").strip()
+            if title:
+                movielist.append(title)
+                if year:
+                    movielist.append(f"{title} {year}")
+
+    movielist = [x.strip() for x in movielist if x and x.strip()]
+    movielist = list(dict.fromkeys(movielist))
 
     if DEBUG_MODE:
         logger.info("[SPELL] movielist size=%s | sample=%s", len(movielist), movielist[:10])
 
     if not movielist:
         if DEBUG_MODE:
-            logger.info("[SPELL] movielist empty after processing imdb results")
+            logger.info("[SPELL] movielist empty after processing results")
+
         search_query = query.replace(" ", "+")
         if webapp:
             return {
@@ -1525,8 +1568,10 @@ async def advantage_spell_chok(client, msg, webapp=False):
             ratio = fuzz.ratio(query.lower(), title.lower())
             if DEBUG_MODE:
                 logger.info("[SPELL] compare -> query=%r | title=%r | ratio=%s", query, title, ratio)
+
             if ratio > best_ratio:
                 best_ratio = ratio
+
             if ratio > 60:
                 matched_movie = title
                 break
@@ -1535,7 +1580,11 @@ async def advantage_spell_chok(client, msg, webapp=False):
             logger.info("[SPELL] best_ratio=%s | matched_movie=%r", best_ratio, matched_movie)
 
         if matched_movie:
-            files, offset, total_results = await get_search_results(matched_movie.lower(), offset=0, filter=True)
+            files, offset, total_results = await get_search_results(
+                matched_movie.lower(),
+                offset=0,
+                filter=True
+            )
 
             if DEBUG_MODE:
                 logger.info(
@@ -1569,36 +1618,43 @@ async def advantage_spell_chok(client, msg, webapp=False):
             if files:
                 await auto_filter(client, msg, (matched_movie, files, offset, total_results))
                 logger.info("SpellCheck matched movie: %s", matched_movie)
+                return
 
-        else:
-            logger.info("SpellCheck found no fuzzy match above threshold.")
-            if DEBUG_MODE:
-                logger.info("[SPELL] suggestions fallback -> %s", movielist[:10])
+        logger.info("SpellCheck found no fuzzy match above threshold.")
+        if DEBUG_MODE:
+            logger.info("[SPELL] suggestions fallback -> %s", movielist[:10])
 
-            if webapp:
-                return {
-                    "status": "suggestions",
-                    "query": query,
-                    "suggestions": movielist[:10],
-                    "files": [],
-                    "total_results": 0,
-                    "next_offset": "",
-                }
+        if webapp:
+            return {
+                "status": "suggestions",
+                "query": query,
+                "suggestions": movielist[:10],
+                "files": [],
+                "total_results": 0,
+                "next_offset": "",
+            }
 
-            search_query = query.replace(" ", "+")
-            buttons = [
-                [InlineKeyboardButton("Search Google", url=f"https://www.google.com/search?q={search_query}")],
-                [InlineKeyboardButton("Request Group", url="https://t.me/+GXTgHzS9LtViN2U9")]
-            ]
-            await msg.reply(
-                f"<b>No close matches found for **{query}**. Try searching on Google or request in the group.</b>",
-                reply_markup=InlineKeyboardMarkup(buttons)
-            )
+        search_query = query.replace(" ", "+")
+        buttons = [
+            [InlineKeyboardButton(movie.strip(), callback_data=f"spolling#{user_id}#{idx}")]
+            for idx, movie in enumerate(movielist[:10])
+        ]
+        buttons.append([InlineKeyboardButton("Search Google", url=f"https://www.google.com/search?q={search_query}")])
+        buttons.append([InlineKeyboardButton("Request Group", url="https://t.me/+GXTgHzS9LtViN2U9")])
+        buttons.append([InlineKeyboardButton("Close", callback_data=f"spolling#{user_id}#close_spellcheck")])
+
+        await msg.reply(
+            f"<b>No close matches found for **{query}**.</b>\n\n"
+            f"<b>Here are some suggestions:</b>",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
+        return
 
     except Exception as e:
-        logger.error(f"Error during spell check for query '{query}': {e}")
+        logger.error("Error during spell check for query '%s': %s", query, e)
         if DEBUG_MODE:
             logger.exception("[SPELL] fuzzy matching or follow-up flow failed")
+
         if webapp:
             return {
                 "status": "not_found",
@@ -1609,36 +1665,17 @@ async def advantage_spell_chok(client, msg, webapp=False):
                 "suggestions": [],
             }
 
-    try:
+        search_query = query.replace(" ", "+")
         buttons = [
-            [InlineKeyboardButton(movie.strip(), callback_data=f"spolling#{user_id}#{idx}")]
-            for idx, movie in enumerate(movielist)
+            [InlineKeyboardButton("Search Google", url=f"https://www.google.com/search?q={search_query}")],
+            [InlineKeyboardButton("Request Group", url="https://t.me/+GXTgHzS9LtViN2U9")]
         ]
-        buttons.append([InlineKeyboardButton("Close", callback_data=f'spolling#{user_id}#close_spellcheck')])
-
-        if DEBUG_MODE:
-            logger.info("[SPELL] sending inline suggestions count=%s", len(movielist))
-
-        t = await msg.reply(
-            f"<b>Here are some suggestions for **{query}**:</b>",
+        await msg.reply(
+            "An error occurred while processing your request. Please try again or check the request group.",
             reply_markup=InlineKeyboardMarkup(buttons)
         )
-        await asyncio.sleep(120)
-        await t.delete()
-    except Exception as e:
-        logger.error(f"Error displaying movie suggestions for query '{query}': {e}")
-        if DEBUG_MODE:
-            logger.exception("[SPELL] suggestion message flow failed")
+        return
 
-    if webapp:
-        return {
-            "status": "suggestions",
-            "query": query,
-            "suggestions": movielist[:10],
-            "files": [],
-            "total_results": 0,
-            "next_offset": "",
-        }
 from database.ia_filterdb import Media
 from utils import clean_file_name
 
