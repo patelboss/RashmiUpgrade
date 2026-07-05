@@ -1209,10 +1209,15 @@ async def auto_filter(client, msg, spoll=False, webapp=False):
         else:
             return
 
+
     else:
-        settings = await get_settings(msg.message.chat.id)
-        message = msg.message.reply_to_message
-        search, files, offset, total_results = spoll
+        if hasattr(msg, "message"):  # CallbackQuery
+            settings = await get_settings(msg.message.chat.id)
+            message = msg.message.reply_to_message
+        else:                               # Normal Message (spell check)
+            settings = await get_settings(msg.chat.id)
+            message = msg
+            search, files, offset, total_results = spoll
 
     pre = 'filep' if settings['file_secure'] else 'file'
     key = f"{message.chat.id}-{message.id}"
