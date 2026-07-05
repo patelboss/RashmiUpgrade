@@ -1360,57 +1360,135 @@ from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from fuzzywuzzy import fuzz
 import logging
 
+from database.ia_filterdb import Media
+from utils import clean_file_name
+
+async def mongo_spell_fallback(query: str, limit: int = 250) -> list[dict]:
+    """
+    Lightweight MongoDB fallback for spell checking.
+
+    Returns:
+        List[dict] where each item has at least:
+            {"title": "..."}
+    """
+    if not query:
+        return []
+
+    words = [w for w in query.split() if len(w) >= 3]
+    if not words:
+        words = [query]
+
+    regex = "|".join(re.escape(w) for w in words)
+
+    try:
+        cursor = (
+            Media.find(
+                {
+                    "file_name": {
+                        "$regex": regex,
+                        "$options": "i",
+                    }
+                }
+            )
+            .limit(limit)
+        )
+        docs = await cursor.to_list(length=limit)
+    except Exception as e:
+        logger.exception("mongo_spell_fallback failed: %s", e)
+        return []
+
+    REMOVE_PATTERN = re.compile(
+        r"""
+        \b(
+            480p|720p|1080p|1440p|2160p|4k|
+            hdrip|webrip|web[- ]?dl|bluray|brrip|dvdrip|hdr|
+            x264|x265|h264|h265|hevc|av1|
+            aac|ac3|dd5\.?1|dts|atmos|
+            esub|proper|remux|uncut|extended|
+            dual\s*audio|multi\s*audio|
+            hindi|english|tamil|telugu|malayalam|kannada|
+            mkv|mp4|avi|m4v
+        )\b
+        """,
+        re.IGNORECASE | re.VERBOSE,
+    )
+
+    seen = set()
+    candidates: list[dict] = []
+
+    for doc in docs:
+        try:
+            name = clean_file_name(getattr(doc, "file_name", "") or "").strip()
+            if not name:
+                continue
+
+            name = re.sub(r"\.[A-Za-z0-9]{2,5}$", "", name)
+            name = re.sub(r"[._\-]+", " ", name)
+            name = re.sub(r"[\[\]\(\)\{\}]", " ", name)
+            name = REMOVE_PATTERN.sub("", name)
+            name = " ".join(name.split()).strip()
+
+            if len(name) < 3:
+                continue
+
+            key = name.lower()
+            if key in seen:
+                continue
+
+            seen.add(key)
+            candidates.append({"title": name})
+
+        except Exception:
+            continue
+
+    candidates.sort(
+        key=lambda item: (
+            fuzz.token_set_ratio(query.lower(), item["title"].lower()),
+            fuzz.partial_ratio(query.lower(), item["title"].lower()),
+            fuzz.ratio(query.lower(), item["title"].lower()),
+        ),
+        reverse=True,
+    )
+
+    if DEBUG_MODE:
+        logger.info(
+            "[SPELL] mongo_spell_fallback(%r) -> %d cleaned titles | sample=%s",
+            query,
+            len(candidates),
+            [item["title"] for item in candidates[:10]],
+        )
+
+    return candidates
+
+
 async def advantage_spell_chok(client, msg, webapp=False):
     """Handles spell check for movie queries."""
     mv_id = msg.id
     user_id = msg.from_user.id if msg.from_user else 0
 
-    if DEBUG_MODE:
+    if webapp:
+        req_user = None
+    else:
+        req_user = await client.get_users(user_id)
         logger.info(
-            "[SPELL] entered | msg_id=%s | user_id=%s | webapp=%s | raw_text=%r",
-            mv_id, user_id, webapp, getattr(msg, "text", None)
+            f"Received spell check request from user {req_user.username or user_id} (User ID: {user_id})."
         )
-
-    req_user = None
-    if not webapp and user_id:
-        try:
-            req_user = await client.get_users(user_id)
-            logger.info(
-                "Received spell check request from user %s (User ID: %s).",
-                req_user.username or user_id,
-                user_id
-            )
-        except Exception as e:
-            if DEBUG_MODE:
-                logger.exception("[SPELL] get_users failed for user_id=%s", user_id)
-            logger.warning("Could not resolve user info for spell check: %s", e)
 
     cleaned_text = re.sub(
         r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|movie(s)?|new|latest|br((o|u)h?)*|^h(e|a)?(l)*(o)*|mal(ayalam)?|t(h)?amil|file|that|find|und(o)*|kit(t(i|y)?)?o(w)?|thar(u)?(o)*w?|kittum(o)*|aya(k)*(um(o)*)?|full\smovie|any(one)|with\ssubtitle(s)?)",
         "",
-        msg.text or "",
+        msg.text,
         flags=re.IGNORECASE
     ).strip()
-
-    logger.info("Processed query in adv spell check: %s", cleaned_text)
-    if DEBUG_MODE:
-        logger.info("[SPELL] after keyword strip -> %r", cleaned_text)
+    logger.info(f"Processed query in adv spell check: {cleaned_text}")
 
     flattened = cleaned_text.replace("\n", " ").replace("\r", " ")
-    logger.info("Processed query in adv spell check: %s", flattened)
-    if DEBUG_MODE:
-        logger.info("[SPELL] flattened -> %r", flattened)
-
-    alphanumeric_only = re.sub(r"[^a-zA-Z0-9\s]", " ", flattened)
-    logger.info("Processed query in adv spell check: %s", alphanumeric_only)
-    if DEBUG_MODE:
-        logger.info("[SPELL] alnum only -> %r", alphanumeric_only)
-
+    logger.info(f"Processed query in adv spell check: {flattened}")
+    alphanumeric_only = re.sub(r'[^a-zA-Z0-9\s]', ' ', flattened)
+    logger.info(f"Processed query in adv spell check: {alphanumeric_only}")
     query = " ".join(alphanumeric_only.split())
 
     if not query:
-        if DEBUG_MODE:
-            logger.info("[SPELL] query empty after cleanup; returning not_found")
         if webapp:
             return {
                 "status": "not_found",
@@ -1422,42 +1500,22 @@ async def advantage_spell_chok(client, msg, webapp=False):
             }
         return
 
-    logger.info("Processed query in adv spell check: %s", query)
-    if DEBUG_MODE:
-        logger.info("[SPELL] normalized query -> %r | length=%s", query, len(query))
+    logger.info(f"Processed query in adv spell check: {query}")
 
     try:
-        if DEBUG_MODE:
-            logger.info("[SPELL] calling get_poster(query=%r, bulk=True)", query)
-
         movies = await get_poster(query, bulk=True)
-        from_mongo = False
 
         if not movies:
             if DEBUG_MODE:
                 logger.info("[SPELL] IMDb returned no movies, trying mongo_spell_fallback(query=%r)", query)
-            from_mongo = True
             movies = await mongo_spell_fallback(query) or []
 
-        logger.info(
-            "SpellCheck %s returned: %s",
-            "Mongo fallback" if from_mongo else "IMDb",
-            len(movies) if movies else 0
-        )
+        logger.info("SpellCheck returned: %s", len(movies) if movies else 0)
 
         if DEBUG_MODE and movies:
-            if from_mongo:
-                logger.info("[SPELL] mongo candidates -> %s", movies[:10])
-            else:
-                logger.info(
-                    "[SPELL] imdb titles -> %s",
-                    [f"{m.get('title')} ({m.get('year')})" for m in movies[:10] if isinstance(m, dict)]
-                )
+            logger.info("[SPELL] candidates sample -> %s", [m.get("title") for m in movies[:10] if isinstance(m, dict)])
 
         if not movies:
-            if DEBUG_MODE:
-                logger.info("[SPELL] no movies found from IMDb or mongo fallback")
-
             search_query = query.replace(" ", "+")
             if webapp:
                 return {
@@ -1480,7 +1538,7 @@ async def advantage_spell_chok(client, msg, webapp=False):
             return
 
     except Exception as e:
-        logger.error("Error fetching movies for query '%s': %s", query, e)
+        logger.error(f"Error fetching movies for query '{query}': {e}")
         if DEBUG_MODE:
             logger.exception("[SPELL] get_poster / mongo fallback failed")
 
@@ -1505,31 +1563,9 @@ async def advantage_spell_chok(client, msg, webapp=False):
         )
         return
 
-    if from_mongo:
-        movielist = []
-        for item in movies:
-            if isinstance(item, str):
-                title = item.strip()
-                if title:
-                    movielist.append(title)
-            elif isinstance(item, dict):
-                title = (item.get("title") or item.get("name") or "").strip()
-                year = str(item.get("year") or "").strip()
-                if title:
-                    movielist.append(title)
-                    if year:
-                        movielist.append(f"{title} {year}")
-    else:
-        movielist = []
-        for movie in movies:
-            if not isinstance(movie, dict):
-                continue
-            title = (movie.get("title") or "").strip()
-            year = str(movie.get("year") or "").strip()
-            if title:
-                movielist.append(title)
-                if year:
-                    movielist.append(f"{title} {year}")
+    movielist = (
+        [movie.get('title') for movie in movies if isinstance(movie, dict) and movie.get('title')]
+    )
 
     movielist = [x.strip() for x in movielist if x and x.strip()]
     movielist = list(dict.fromkeys(movielist))
@@ -1538,9 +1574,6 @@ async def advantage_spell_chok(client, msg, webapp=False):
         logger.info("[SPELL] movielist size=%s | sample=%s", len(movielist), movielist[:10])
 
     if not movielist:
-        if DEBUG_MODE:
-            logger.info("[SPELL] movielist empty after processing results")
-
         search_query = query.replace(" ", "+")
         if webapp:
             return {
@@ -1566,38 +1599,18 @@ async def advantage_spell_chok(client, msg, webapp=False):
 
     try:
         matched_movie = None
-        best_ratio = -1
-
         for title in movielist:
             ratio = fuzz.ratio(query.lower(), title.lower())
-            if DEBUG_MODE:
-                logger.info("[SPELL] compare -> query=%r | title=%r | ratio=%s", query, title, ratio)
-
-            if ratio > best_ratio:
-                best_ratio = ratio
-
+            logger.debug(f"Matching '{query}' with '{title}', Ratio: {ratio}")
             if ratio > 60:
                 matched_movie = title
                 break
 
         if DEBUG_MODE:
-            logger.info("[SPELL] best_ratio=%s | matched_movie=%r", best_ratio, matched_movie)
+            logger.info("[SPELL] matched_movie=%r", matched_movie)
 
         if matched_movie:
-            files, offset, total_results = await get_search_results(
-                matched_movie.lower(),
-                offset=0,
-                filter=True
-            )
-
-            if DEBUG_MODE:
-                logger.info(
-                    "[SPELL] matched movie search -> matched=%r | files=%s | offset=%r | total=%s",
-                    matched_movie,
-                    len(files) if files else 0,
-                    offset,
-                    total_results
-                )
+            files, offset, total_results = await get_search_results(matched_movie.lower(), offset=0, filter=True)
 
             if webapp:
                 if files:
@@ -1621,12 +1634,7 @@ async def advantage_spell_chok(client, msg, webapp=False):
 
             if files:
                 await auto_filter(client, msg, (matched_movie, files, offset, total_results))
-                logger.info("SpellCheck matched movie: %s", matched_movie)
                 return
-
-        logger.info("SpellCheck found no fuzzy match above threshold.")
-        if DEBUG_MODE:
-            logger.info("[SPELL] suggestions fallback -> %s", movielist[:10])
 
         if webapp:
             return {
@@ -1655,7 +1663,7 @@ async def advantage_spell_chok(client, msg, webapp=False):
         return
 
     except Exception as e:
-        logger.error("Error during spell check for query '%s': %s", query, e)
+        logger.error(f"Error during spell check for query '{query}': {e}")
         if DEBUG_MODE:
             logger.exception("[SPELL] fuzzy matching or follow-up flow failed")
 
@@ -1679,115 +1687,6 @@ async def advantage_spell_chok(client, msg, webapp=False):
             reply_markup=InlineKeyboardMarkup(buttons)
         )
         return
-
-from database.ia_filterdb import Media
-from utils import clean_file_name
-
-
-async def mongo_spell_fallback(query: str, limit: int = 250) -> list[str]:
-    if not query:
-        return []
-    # Search using every meaningful word instead of only the first one.
-    words = [w for w in query.split() if len(w) >= 3]
-    if not words:
-        words = [query]
-    regex = "|".join(re.escape(w) for w in words)
-    try:
-        cursor = (
-            Media.find(
-                {
-                    "file_name": {
-                        "$regex": regex,
-                        "$options": "i",
-                    }
-                }
-            )
-            .limit(limit)
-        )
-        docs = await cursor.to_list(length=limit)
-    except Exception as e:
-        logger.exception("mongo_spell_fallback failed: %s", e)
-        return []
-    REMOVE_PATTERN = re.compile(
-        r"""
-        \b(
-            480p|720p|1080p|1440p|2160p|4k|
-            hdrip|webrip|web[- ]?dl|bluray|brrip|dvdrip|hdr|
-            x264|x265|h264|h265|hevc|av1|
-            aac|ac3|dd5\.?1|dts|atmos|
-            esub|proper|remux|uncut|extended|
-            dual\s*audio|multi\s*audio|
-            hindi|english|tamil|telugu|malayalam|kannada|
-            mkv|mp4|avi|m4v
-        )\b
-        """,
-        re.IGNORECASE | re.VERBOSE,
-    )
-
-    YEAR_PATTERN = re.compile(r"\b(19|20)\d{2}\b")
-
-    seen = {}
-    candidates = []
-
-    for doc in docs:
-        try:
-            name = clean_file_name(doc.file_name)
-
-            if not name:
-                continue
-
-            # Remove file extension
-            name = re.sub(r"\.[A-Za-z0-9]{2,4}$", "", name)
-
-            # Normalize separators
-            name = re.sub(r"[._\-]+", " ", name)
-
-            # Remove quality / codec tags
-            name = REMOVE_PATTERN.sub("", name)
-
-            # Remove year
-            name = YEAR_PATTERN.sub("", name)
-
-            # Remove brackets
-            name = re.sub(r"[\[\]\(\)\{\}]", " ", name)
-
-            # Compress spaces
-            name = " ".join(name.split()).strip()
-
-            if len(name) < 3:
-                continue
-
-            key = name.lower()
-
-            if key in seen:
-                continue
-
-            seen[key] = True
-            candidates.append(name)
-
-        except Exception:
-            continue
-
-    # Rank by similarity (better than plain ratio for movie names)
-    candidates.sort(
-        key=lambda title: (
-            fuzz.token_set_ratio(query.lower(), title.lower()),
-            fuzz.partial_ratio(query.lower(), title.lower()),
-            fuzz.ratio(query.lower(), title.lower()),
-        ),
-        reverse=True,
-    )
-
-    if DEBUG_MODE:
-        logger.info(
-            "[SPELL] mongo_spell_fallback(%r) -> %d cleaned titles | sample=%s",
-            query,
-            len(candidates),
-            candidates[:10],
-        )
-
-    return candidates
-
 
 async def manual_filters(client, message, text=False):
     group_id = message.chat.id
