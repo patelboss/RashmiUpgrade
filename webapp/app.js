@@ -4,7 +4,10 @@
 ────────────────────────────────────────────────────────────────────────── */
 
 console.log("Initializing AutoFile Mini-App Client Layer...");
-
+console.log("Telegram object:", window.Telegram);
+console.log("WebApp:", window.Telegram?.WebApp);
+console.log("initData:", window.Telegram?.WebApp?.initData);
+console.log("initDataUnsafe:", window.Telegram?.WebApp?.initDataUnsafe);
 // ── Telegram Web App SDK init ─────────────────────────────────────────────
 const tg = window.Telegram?.WebApp;
 if (tg) {
