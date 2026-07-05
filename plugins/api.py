@@ -29,7 +29,7 @@ from utils import get_size, temp
 from plugins.pm_filter import *
 
 # ── 🛠️ UNIFIED SYSTEM LOGGING MATRIX CONFIGURATION ───────────────────
-logger = logging.getLogger("api_hub")
+logger = logging.getLogger("api.py")
 logger.setLevel(logging.INFO)
 logger.propagate = False
 
