@@ -1639,7 +1639,85 @@ async def advantage_spell_chok(client, msg, webapp=False):
             "total_results": 0,
             "next_offset": "",
         }
+from database.ia_filterdb import Media
+from utils import clean_file_name
 
+async def mongo_spell_fallback(query: str, limit: int = 250) -> list[str]:
+    """
+    Lightweight MongoDB fallback for spell checking.
+
+    Purpose:
+        - NOT to search/download files.
+        - Only collect possible movie names from nearby filenames.
+        - Used when IMDb returns no results.
+
+    Returns:
+        List[str] of unique candidate titles.
+    """
+
+    if not query:
+        return []
+
+    # First word usually gives the best candidate set.
+    keyword = query.split()[0]
+
+    try:
+        cursor = (
+            Media.find(
+                {
+                    "file_name": {
+                        "$regex": re.escape(keyword),
+                        "$options": "i",
+                    }
+                }
+            )
+            .limit(limit)
+        )
+
+        docs = await cursor.to_list(length=limit)
+
+    except Exception as e:
+        logger.exception("mongo_spell_fallback failed: %s", e)
+        return []
+
+    seen = set()
+    candidates = []
+
+    for doc in docs:
+        try:
+            name = clean_file_name(doc.file_name).strip()
+
+            if not name:
+                continue
+
+            # Remove common quality tags.
+            name = re.sub(
+                r"\b(480p|720p|1080p|2160p|4K|HDRip|WEB[- ]?DL|WEBRip|BluRay|DVDRip|x264|x265|HEVC|AAC|ESub|Dual Audio|Hindi|English|Tamil|Telugu|Malayalam)\b",
+                "",
+                name,
+                flags=re.IGNORECASE,
+            )
+
+            name = " ".join(name.split())
+
+            key = name.lower()
+
+            if key in seen:
+                continue
+
+            seen.add(key)
+            candidates.append(name)
+
+        except Exception:
+            continue
+
+    logger.info(
+        "mongo_spell_fallback('%s') -> %d candidate titles",
+        query,
+        len(candidates),
+    )
+
+    return candidates
 async def manual_filters(client, message, text=False):
     group_id = message.chat.id
     name = text or message.text
