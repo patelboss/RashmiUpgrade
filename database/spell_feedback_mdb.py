@@ -20,10 +20,10 @@ import re
 from datetime import datetime
 from typing import Any
 
-from pymongo import MongoClient, ASCENDING, DESCENDING
+from pymongo import ASCENDING, DESCENDING, MongoClient
 from pymongo.errors import PyMongoError
 
-from info import DATABASE_URI, DATABASE_NAME, DEBUG_MODE
+from info import DATABASE_NAME, DATABASE_URI, DEBUG_MODE
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -35,14 +35,8 @@ _db = _client[DATABASE_NAME]
 spell_feedback_col = _db["spell_feedback"]
 spell_title_col = _db["spell_title_stats"]
 
-
 _NORMALIZE_RE = re.compile(r"[^a-z0-9\s]+", re.IGNORECASE)
 _SPACE_RE = re.compile(r"\s+")
-
-
-def _log(*args: Any) -> None:
-    if DEBUG_MODE:
-        logger.info(*args)
 
 
 def _norm(text: str | None) -> str:
@@ -97,7 +91,8 @@ def ensure_spell_feedback_indexes() -> None:
             name="spell_title_count_idx",
         )
 
-        _log("[SPELLFDB] indexes ensured")
+        if DEBUG_MODE:
+            logger.info("[SPELLFDB] indexes ensured")
     except Exception as exc:
         logger.exception("[SPELLFDB] failed to create indexes: %s", exc)
 
@@ -129,70 +124,73 @@ async def record_spell_feedback(
         search_norm = _norm(search_raw)
         title_norm = _norm(title_raw)
 
-        _log(
-            "[SPELLFDB] record entered | search=%r | selected=%r | user_id=%s | source=%s",
-            search_raw,
-            title_raw,
-            user_id,
-            source,
-        )
+        if DEBUG_MODE:
+            logger.info(
+                "[SPELLFDB] record entered | search=%r | selected=%r | user_id=%s | source=%s",
+                search_raw,
+                title_raw,
+                user_id,
+                source,
+            )
 
         if not search_norm or not title_norm:
-            _log("[SPELLFDB] record skipped due to empty normalized values")
+            if DEBUG_MODE:
+                logger.info("[SPELLFDB] record skipped due to empty normalized values")
             return False
 
         now = datetime.utcnow()
 
-        # Pair-level memory: how often a query led to a specific correction.
+        pair_set_on_insert = {
+            "search": search_raw,
+            "selected_title": title_raw,
+            "search_norm": search_norm,
+            "selected_norm": title_norm,
+            "first_seen": now,
+        }
+        pair_set = {
+            "last_seen": now,
+            "source": source,
+        }
+        if user_id is not None:
+            pair_set["last_user_id"] = int(user_id)
+
+        pair_update: dict[str, Any] = {
+            "$setOnInsert": pair_set_on_insert,
+            "$set": pair_set,
+            "$inc": {"count": 1},
+        }
+        if user_id is not None:
+            pair_update["$addToSet"] = {"user_ids": int(user_id)}
+
         spell_feedback_col.update_one(
             {"search_norm": search_norm, "selected_norm": title_norm},
-            {
-                "$setOnInsert": {
-                    "search": search_raw,
-                    "selected_title": title_raw,
-                    "search_norm": search_norm,
-                    "selected_norm": title_norm,
-                    "first_seen": now,
-                },
-                "$set": {
-                    "selected_title": title_raw,
-                    "last_seen": now,
-                    "source": source,
-                },
-                "$inc": {"count": 1},
-                "$addToSet": {"user_ids": int(user_id)} if user_id else {},
-            },
+            pair_update,
             upsert=True,
         )
 
-        # Title-level memory: global popularity of the canonical title.
-        title_doc = {
+        title_set_on_insert = {
             "title": title_raw,
             "title_norm": title_norm,
+            "first_seen": now,
+        }
+        title_set = {
             "last_seen": now,
         }
-        if user_id:
-            title_doc["last_user_id"] = int(user_id)
+        if user_id is not None:
+            title_set["last_user_id"] = int(user_id)
 
         spell_title_col.update_one(
             {"title_norm": title_norm},
             {
-                "$setOnInsert": {
-                    "title": title_raw,
-                    "title_norm": title_norm,
-                    "first_seen": now,
-                },
-                "$set": {
-                    "title": title_raw,
-                    "last_seen": now,
-                    **({"last_user_id": int(user_id)} if user_id else {}),
-                },
+                "$setOnInsert": title_set_on_insert,
+                "$set": title_set,
                 "$inc": {"count": 1},
             },
             upsert=True,
         )
 
-        _log("[SPELLFDB] record saved | search=%r | selected=%r", search_norm, title_norm)
+        if DEBUG_MODE:
+            logger.info("[SPELLFDB] record saved | search=%r | selected=%r", search_norm, title_norm)
         return True
 
     except PyMongoError as exc:
@@ -212,14 +210,13 @@ async def get_spell_feedback_suggestions(query: str, limit: int = 10) -> list[di
             {"title": "Mirzapur", "count": 14},
             {"title": "Mirzapur Season 2", "count": 4},
         ]
-
-    The caller can safely use item["title"] exactly like IMDb results.
     """
     try:
         raw_query = (query or "").strip()
         q_norm = _norm(raw_query)
 
-        _log("[SPELLFDB] fetch entered | query=%r | normalized=%r | limit=%s", raw_query, q_norm, limit)
+        if DEBUG_MODE:
+            logger.info("[SPELLFDB] fetch entered | query=%r | normalized=%r | limit=%s", raw_query, q_norm, limit)
 
         if not q_norm:
             return []
@@ -228,7 +225,6 @@ async def get_spell_feedback_suggestions(query: str, limit: int = 10) -> list[di
         if not tokens:
             tokens = [q_norm]
 
-        # Match exact query first, then loose token search.
         regex_parts = [re.escape(q_norm)] + [re.escape(t) for t in tokens]
         regex = "|".join(regex_parts)
 
@@ -265,12 +261,13 @@ async def get_spell_feedback_suggestions(query: str, limit: int = 10) -> list[di
             if (doc.get("title") or "").strip()
         ]
 
-        _log(
-            "[SPELLFDB] feedback suggestions | query=%r | count=%s | sample=%s",
-            q_norm,
-            len(results),
-            [r["title"] for r in results[:10]],
-        )
+        if DEBUG_MODE:
+            logger.info(
+                "[SPELLFDB] feedback suggestions | query=%r | count=%s | sample=%s",
+                q_norm,
+                len(results),
+                [r["title"] for r in results[:10]],
+            )
         return results
 
     except PyMongoError as exc:
@@ -284,7 +281,6 @@ async def get_spell_feedback_suggestions(query: str, limit: int = 10) -> list[di
 async def get_spell_feedback_top_titles(limit: int = 50) -> list[dict]:
     """
     Return the most selected canonical titles overall.
-    Useful for admin/debug pages.
     """
     try:
         pipeline = [
@@ -300,7 +296,8 @@ async def get_spell_feedback_top_titles(limit: int = 50) -> list[dict]:
             },
         ]
         docs = list(spell_title_col.aggregate(pipeline))
-        _log("[SPELLFDB] top titles fetched | count=%s", len(docs))
+        if DEBUG_MODE:
+            logger.info("[SPELLFDB] top titles fetched | count=%s", len(docs))
         return docs
     except Exception as exc:
         logger.exception("[SPELLFDB] failed to fetch top titles: %s", exc)
@@ -310,7 +307,6 @@ async def get_spell_feedback_top_titles(limit: int = 50) -> list[dict]:
 async def get_spell_feedback_pair_stats(search_query: str, limit: int = 10) -> list[dict]:
     """
     Return the top selected titles for a single query.
-    This is stricter than get_spell_feedback_suggestions().
     """
     try:
         q_norm = _norm(search_query)
@@ -339,7 +335,8 @@ async def get_spell_feedback_pair_stats(search_query: str, limit: int = 10) -> l
             for doc in docs
             if (doc.get("title") or "").strip()
         ]
-        _log("[SPELLFDB] pair stats | query=%r | count=%s", q_norm, len(results))
+        if DEBUG_MODE:
+            logger.info("[SPELLFDB] pair stats | query=%r | count=%s", q_norm, len(results))
         return results
     except Exception as exc:
         logger.exception("[SPELLFDB] failed to fetch pair stats: %s", exc)
