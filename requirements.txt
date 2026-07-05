@@ -21,7 +21,8 @@ fuzzywuzzy>=0.18.0
 python-Levenshtein>=0.23.0
 
 # IMDB
-cinemagoer>=2023.5.1
+git+https://github.com/Joelkb/cinemagoer
+#cinemagoer>=2023.5.1
 SQLAlchemy==1.4.54
 
 # Utilities
