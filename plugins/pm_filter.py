@@ -1681,9 +1681,9 @@ async def advantage_spell_chok(client, msg, webapp=False):
                     "next_offset": "",
                 }
 
-            if files:
-                await auto_filter(client, msg, (matched_movie, files, offset, total_results))
-                return
+            #if files:
+               # await auto_filter(client, msg, (matched_movie, files, offset, total_results))
+               # return
 
         if webapp:
             return {
