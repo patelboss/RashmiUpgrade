@@ -32,7 +32,7 @@ from database.filters_mdb import (
     get_filters,
 )
 from variables import CUSTOM_FILE_CAPTION, VERIFY, VERIFY_TUTORIAL, DLTTM, AUTH_CHANNELS
-
+from database.spell_feedback_mdb import get_spell_feedback_suggestions
 import logging
 from pyrogram.enums import ParseMode
 logger = logging.getLogger(__name__)
@@ -1368,125 +1368,6 @@ import logging
 from database.ia_filterdb import Media
 from utils import clean_file_name
 
-async def mongo_spell_fallback(query: str, limit: int = 250) -> list[dict]:
-    if not query:
-        return []
-
-    words = [w for w in query.split() if len(w) >= 3]
-    if not words:
-        words = [query]
-
-    regex = "|".join(re.escape(w) for w in words)
-
-    try:
-        cursor = (
-            Media.find(
-                {
-                    "file_name": {
-                        "$regex": regex,
-                        "$options": "i",
-                    }
-                }
-            )
-            .limit(limit)
-        )
-
-        docs = await cursor.to_list(length=limit)
-
-    except Exception as e:
-        logger.exception("mongo_spell_fallback failed: %s", e)
-        return []
-
-    REMOVE_PATTERN = re.compile(
-        r"""
-        \b(
-            480p|720p|1080p|1440p|2160p|4k|
-            hdrip|webrip|web[- ]?dl|bluray|brrip|dvdrip|hdr|
-            x264|x265|h264|h265|hevc|av1|
-            aac|ac3|dd5\.?1|dts|atmos|
-            esub|proper|remux|uncut|extended|
-            dual\s*audio|multi\s*audio|
-            hindi|english|tamil|telugu|malayalam|kannada|
-            mkv|mp4|avi|m4v
-        )\b
-        """,
-        re.IGNORECASE | re.VERBOSE,
-    )
-
-    YEAR_PATTERN = re.compile(r"\b((?:19|20)\d{2})\b")
-
-    seen = set()
-    candidates = []
-
-    for doc in docs:
-        try:
-            name = clean_file_name(getattr(doc, "file_name", "") or "").strip()
-
-            if not name:
-                continue
-
-            # Remove extension
-            name = re.sub(r"\.[A-Za-z0-9]{2,5}$", "", name)
-
-            # Normalize separators
-            name = re.sub(r"[._\-]+", " ", name)
-
-            # Extract year BEFORE removing it
-            year_match = YEAR_PATTERN.search(name)
-            year = year_match.group(1) if year_match else None
-
-            # Remove year from title
-            title = YEAR_PATTERN.sub("", name)
-
-            # Remove quality / codec tags
-            title = REMOVE_PATTERN.sub("", title)
-
-            # Remove brackets
-            title = re.sub(r"[\[\]\(\)\{\}]", " ", title)
-
-            # Compress spaces
-            title = " ".join(title.split()).strip()
-
-            if len(title) < 3:
-                continue
-
-            key = title.lower()
-
-            if key in seen:
-                continue
-
-            seen.add(key)
-
-            candidates.append({
-                "title": title,
-                "year": year
-            })
-
-        except Exception:
-            continue
-
-    candidates.sort(
-        key=lambda item: (
-            fuzz.token_set_ratio(query.lower(), item["title"].lower()),
-            fuzz.partial_ratio(query.lower(), item["title"].lower()),
-            fuzz.ratio(query.lower(), item["title"].lower()),
-        ),
-        reverse=True,
-    )
-
-    if DEBUG_MODE:
-        logger.info(
-            "[SPELL] mongo_spell_fallback(%r) -> %d candidates | sample=%s",
-            query,
-            len(candidates),
-            [
-                f"{m['title']} ({m['year']})" if m["year"] else m["title"]
-                for m in candidates[:10]
-            ],
-        )
-
-    return candidates
-
 async def advantage_spell_chok(client, msg, webapp=False):
     """Handles spell check for movie queries."""
     mv_id = msg.id
@@ -1539,7 +1420,10 @@ async def advantage_spell_chok(client, msg, webapp=False):
         logger.info("SpellCheck returned: %s", len(movies) if movies else 0)
 
         if DEBUG_MODE and movies:
-            logger.info("[SPELL] candidates sample -> %s", [m.get("title") for m in movies[:10] if isinstance(m, dict)])
+            logger.info(
+                "[SPELL] candidates sample -> %s",
+                [m.get("title") for m in movies[:10] if isinstance(m, dict)]
+            )
 
         if not movies:
             search_query = query.replace(" ", "+")
@@ -1590,7 +1474,7 @@ async def advantage_spell_chok(client, msg, webapp=False):
         return
 
     movielist = (
-        [movie.get('title') for movie in movies if isinstance(movie, dict) and movie.get('title')]
+        [movie.get("title") for movie in movies if isinstance(movie, dict) and movie.get("title")]
     )
 
     movielist = [x.strip() for x in movielist if x and x.strip()]
@@ -1625,19 +1509,16 @@ async def advantage_spell_chok(client, msg, webapp=False):
 
     try:
         matched_movie = None
-        best_ratio = 60  # Only accept matches strictly better than 60
-        for title in movielist:
+        best_ratio = 60
 
+        for title in movielist:
             ratio = fuzz.ratio(query.lower(), title.lower())
             logger.debug(f"Matching '{query}' with '{title}', Ratio: {ratio}")
-            
+
             if ratio > best_ratio:
                 best_ratio = ratio
                 matched_movie = title
-        
-                
 
-		
         if DEBUG_MODE:
             logger.info("[SPELL] matched_movie=%r", matched_movie)
 
@@ -1719,6 +1600,154 @@ async def advantage_spell_chok(client, msg, webapp=False):
             reply_markup=InlineKeyboardMarkup(buttons)
         )
         return
+async def mongo_spell_fallback(query: str, limit: int = 250) -> list[dict]:
+    if not query:
+        return []
+
+    query = query.strip()
+    if DEBUG_MODE:
+        logger.info("[SPELL] mongo_spell_fallback entered | query=%r | limit=%s", query, limit)
+
+    seen = set()
+    candidates: list[dict] = []
+
+    feedback_limit = min(max(1, limit), 25)
+    try:
+        feedback_hits = await get_spell_feedback_suggestions(query, limit=feedback_limit)
+        if DEBUG_MODE:
+            logger.info(
+                "[SPELL] feedback hits=%s | sample=%s",
+                len(feedback_hits) if feedback_hits else 0,
+                [item.get("title") for item in (feedback_hits or [])[:10]],
+            )
+
+        for item in feedback_hits or []:
+            title = (item.get("title") or "").strip()
+            if not title:
+                continue
+
+            key = title.lower()
+            if key in seen:
+                continue
+
+            seen.add(key)
+            candidates.append({
+                "title": title,
+                "source": "feedback",
+                "count": int(item.get("count") or 0),
+            })
+
+            if len(candidates) >= limit:
+                return candidates[:limit]
+
+    except Exception as e:
+        logger.exception("[SPELL] feedback lookup failed in mongo_spell_fallback: %s", e)
+
+    words = [w for w in query.split() if len(w) >= 3]
+    if not words:
+        words = [query]
+
+    regex = "|".join(re.escape(w) for w in words)
+
+    try:
+        cursor = (
+            Media.find(
+                {
+                    "file_name": {
+                        "$regex": regex,
+                        "$options": "i",
+                    }
+                }
+            )
+            .limit(limit)
+        )
+        docs = await cursor.to_list(length=limit)
+
+        if DEBUG_MODE:
+            logger.info("[SPELL] media docs fetched=%s for query=%r", len(docs) if docs else 0, query)
+
+    except Exception as e:
+        logger.exception("mongo_spell_fallback failed: %s", e)
+        return candidates[:limit]
+
+    REMOVE_PATTERN = re.compile(
+        r"""
+        \b(
+            480p|720p|1080p|1440p|2160p|4k|
+            hdrip|webrip|web[- ]?dl|bluray|brrip|dvdrip|hdr|
+            x264|x265|h264|h265|hevc|av1|
+            aac|ac3|dd5\.?1|dts|atmos|
+            esub|proper|remux|uncut|extended|
+            dual\s*audio|multi\s*audio|
+            hindi|english|tamil|telugu|malayalam|kannada|
+            mkv|mp4|avi|m4v
+        )\b
+        """,
+        re.IGNORECASE | re.VERBOSE,
+    )
+
+    YEAR_PATTERN = re.compile(r"\b((?:19|20)\d{2})\b")
+
+    media_candidates: list[dict] = []
+
+    for doc in docs:
+        try:
+            name = clean_file_name(getattr(doc, "file_name", "") or "").strip()
+            if not name:
+                continue
+
+            name = re.sub(r"\.[A-Za-z0-9]{2,5}$", "", name)
+            name = re.sub(r"[._\-]+", " ", name)
+
+            year_match = YEAR_PATTERN.search(name)
+            year = year_match.group(1) if year_match else None
+
+            title = YEAR_PATTERN.sub("", name)
+            title = REMOVE_PATTERN.sub("", title)
+            title = re.sub(r"[\[\]\(\)\{\}]", " ", title)
+            title = " ".join(title.split()).strip()
+
+            if len(title) < 3:
+                continue
+
+            key = title.lower()
+            if key in seen:
+                continue
+
+            seen.add(key)
+
+            item = {"title": title, "source": "media"}
+            if year:
+                item["year"] = year
+            media_candidates.append(item)
+
+        except Exception:
+            continue
+
+    media_candidates.sort(
+        key=lambda item: (
+            fuzz.token_set_ratio(query.lower(), item["title"].lower()),
+            fuzz.partial_ratio(query.lower(), item["title"].lower()),
+            fuzz.ratio(query.lower(), item["title"].lower()),
+        ),
+        reverse=True,
+    )
+
+    candidates.extend(media_candidates)
+
+    if DEBUG_MODE:
+        logger.info(
+            "[SPELL] mongo_spell_fallback(%r) -> %d candidates | sample=%s",
+            query,
+            len(candidates),
+            [
+                f"{m['title']} ({m['year']})" if m.get("year") else m["title"]
+                for m in candidates[:10]
+            ],
+        )
+
+    return candidates[:limit]
+
 
 async def manual_filters(client, message, text=False):
     group_id = message.chat.id
