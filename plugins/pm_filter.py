@@ -41,7 +41,7 @@ from database.ia_filterdb import Media
 from utils import clean_file_name
 
 from variables import CUSTOM_FILE_CAPTION, VERIFY, VERIFY_TUTORIAL, DLTTM, AUTH_CHANNELS
-from database.spell_feedback_mdb import get_spell_feedback_suggestions
+from database.spell_feedback_mdb import *
 import logging
 from pyrogram.enums import ParseMode
 logger = logging.getLogger(__name__)
@@ -284,14 +284,44 @@ async def next_page(bot, query):
 @Client.on_callback_query(filters.regex(r"^spolling"))
 async def advantage_spoll_choker(bot, query):
     _, user, movie_ = query.data.split('#')
+
     if int(user) != 0 and query.from_user.id != int(user):
-        return await query.answer("This Message is not for you dear. Don't worry you can send new one !", show_alert=True)
+        return await query.answer(
+            "This Message is not for you dear. Don't worry you can send new one !",
+            show_alert=True
+        )
+
     if movie_ == "close_spellcheck":
         return await query.message.delete()
+
     movies = SPELL_CHECK.get(query.message.reply_to_message.id)
     if not movies:
-        return await query.answer("You are clicking on an old button which is expired.", show_alert=True)
-    movie = movies[(int(movie_))]
+        return await query.answer(
+            "You are clicking on an old button which is expired.",
+            show_alert=True
+        )
+
+    movie = movies[int(movie_)]
+    original_query = getattr(query.message.reply_to_message, "text", "") or ""
+
+    if DEBUG_MODE:
+        logger.info(
+            "[SPELLFDB] saving feedback | search=%r | selected=%r | user_id=%s",
+            original_query,
+            movie,
+            query.from_user.id,
+        )
+
+    try:
+        await record_spell_feedback(
+            search_query=original_query,
+            selected_title=movie,
+            user_id=query.from_user.id,
+            source="spolling",
+        )
+    except Exception as e:
+        logger.exception("[SPELLFDB] failed to save spell feedback: %s", e)
+
     await query.answer('Checking for Movie in database...')
     k = await manual_filters(bot, query.message, text=movie)
     if k == False:
@@ -303,7 +333,6 @@ async def advantage_spoll_choker(bot, query):
             k = await query.message.edit(' 𝐜𝐮𝐫𝐫𝐞𝐧𝐭𝐥𝐲 𝐮𝐧𝐚𝐯𝐚𝐢𝐥𝐚𝐛𝐥𝐞 ! \n𝐰𝐞 𝐚𝐫𝐞 𝐫𝐞𝐚𝐥𝐥𝐲 𝐬𝐨𝐫𝐫𝐲 𝐟𝐨𝐫 𝐢𝐧𝐜𝐨𝐧𝐯𝐞𝐧𝐢𝐞𝐧𝐜𝐞 !\n\n 𝐏𝐥𝐞𝐚𝐬𝐞 𝐬𝐞𝐧𝐭 𝐭𝐡𝐢𝐬 𝐌𝐨𝐯𝐢𝐞 𝐨𝐫 𝐖𝐞𝐛𝐬𝐞𝐫𝐢𝐞𝐬 𝐧𝐚𝐦𝐞 𝐢𝐧 #Request 𝐓𝐨𝐩𝐢𝐜 𝐨𝐫 𝐬𝐞𝐧𝐭 𝐮𝐬𝐢𝐧𝐠 "#𝐑𝐞𝐪𝐮𝐞𝐬𝐭 𝐌𝐨𝐯𝐢𝐞 𝐍𝐚𝐦𝐞 & 𝐑𝐞𝐥𝐞𝐚𝐬𝐞 𝐘𝐞𝐚𝐫.\n example: <code> #Request Mirzapur Season 1 2018 </code>\n 𝐨𝐮𝐫 𝐠𝐫𝐞𝐚𝐭 𝐚𝐝𝐦𝐢𝐧𝐬 𝐰𝐢𝐥𝐥 𝐮𝐩𝐥𝐨𝐚𝐝 𝐢𝐭 𝐚𝐬 𝐬𝐨𝐨𝐧 𝐚𝐬 𝐩𝐨𝐬𝐬𝐢𝐛𝐥𝐞 !')
             await asyncio.sleep(10)
             await k.delete()
-
 
 @Client.on_callback_query()
 async def cb_handler(client: Client, query: CallbackQuery):
@@ -1238,3 +1267,257 @@ async def manual_filters(client, message, text=False):
                 break
     else:
         return False
+async def advantage_spell_chok(client, msg, webapp=False):
+    """Handles spell check for movie queries."""
+    mv_id = msg.id
+    user_id = msg.from_user.id if msg.from_user else 0
+
+    if webapp:
+        req_user = None
+    else:
+        req_user = await client.get_users(user_id)
+        logger.info(
+            f"Received spell check request from user {req_user.username or user_id} (User ID: {user_id})."
+        )
+
+    cleaned_text = re.sub(
+        r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|movie(s)?|new|latest|br((o|u)h?)*|^h(e|a)?(l)*(o)*|mal(ayalam)?|t(h)?amil|file|that|find|und(o)*|kit(t(i|y)?)?o(w)?|thar(u)?(o)*w?|kittum(o)*|aya(k)*(um(o)*)?|full\smovie|any(one)|with\ssubtitle(s)?)",
+        "",
+        msg.text,
+        flags=re.IGNORECASE
+    ).strip()
+    logger.info(f"Processed query in adv spell check: {cleaned_text}")
+
+    flattened = cleaned_text.replace("\n", " ").replace("\r", " ")
+    logger.info(f"Processed query in adv spell check: {flattened}")
+    alphanumeric_only = re.sub(r'[^a-zA-Z0-9\s]', ' ', flattened)
+    logger.info(f"Processed query in adv spell check: {alphanumeric_only}")
+    query = " ".join(alphanumeric_only.split())
+
+    if not query:
+        if webapp:
+            return {
+                "status": "not_found",
+                "query": "",
+                "files": [],
+                "total_results": 0,
+                "next_offset": "",
+                "suggestions": [],
+            }
+        return
+
+    logger.info(f"Processed query in adv spell check: {query}")
+
+    try:
+        movies = []
+
+        feedback_movies = await get_spell_feedback_suggestions(query, limit=250)
+        if feedback_movies:
+            movies = feedback_movies
+            if DEBUG_MODE:
+                logger.info("[SPELL] feedback suggestions used | count=%s", len(movies))
+                logger.info(
+                    "[SPELL] feedback candidates sample -> %s",
+                    [m.get("title") for m in movies[:10] if isinstance(m, dict)]
+                )
+
+        if not movies:
+            movies = await mongo_spell_fallback(query) or []
+            if DEBUG_MODE:
+                logger.info("[SPELL] mongo fallback used | count=%s", len(movies))
+                if movies:
+                    logger.info(
+                        "[SPELL] mongo candidates sample -> %s",
+                        [m.get("title") for m in movies[:10] if isinstance(m, dict)]
+                    )
+
+        if not movies:
+            if DEBUG_MODE:
+                logger.info("[SPELL] IMDb fallback used for query=%r", query)
+            movies = await get_poster(query, bulk=True) or []
+
+        logger.info("SpellCheck returned: %s", len(movies) if movies else 0)
+
+        if DEBUG_MODE and movies:
+            logger.info(
+                "[SPELL] candidates sample -> %s",
+                [m.get("title") for m in movies[:10] if isinstance(m, dict)]
+            )
+
+        if not movies:
+            search_query = query.replace(" ", "+")
+            if webapp:
+                return {
+                    "status": "not_found",
+                    "query": query,
+                    "files": [],
+                    "total_results": 0,
+                    "next_offset": "",
+                    "suggestions": [],
+                }
+
+            buttons = [
+                [InlineKeyboardButton("Search Google", url=f"https://www.google.com/search?q={search_query}")],
+                [InlineKeyboardButton("Request Group", url="https://t.me/+GXTgHzS9LtViN2U9")]
+            ]
+            await msg.reply(
+                f"I couldn't find any movies related to **{query}**. Try searching on Google or in the request group.",
+                reply_markup=InlineKeyboardMarkup(buttons)
+            )
+            return
+
+    except Exception as e:
+        logger.error(f"Error fetching movies for query '{query}': {e}")
+        if DEBUG_MODE:
+            logger.exception("[SPELL] feedback / mongo / imdb fallback failed")
+
+        search_query = query.replace(" ", "+")
+        if webapp:
+            return {
+                "status": "not_found",
+                "query": query,
+                "files": [],
+                "total_results": 0,
+                "next_offset": "",
+                "suggestions": [],
+            }
+
+        buttons = [
+            [InlineKeyboardButton("Search Google", url=f"https://www.google.com/search?q={search_query}")],
+            [InlineKeyboardButton("Request Group", url="https://t.me/+GXTgHzS9LtViN2U9")]
+        ]
+        await msg.reply(
+            "An error occurred while processing your request. Please try again or check the request group.",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
+        return
+
+    movielist = [
+        movie.get('title')
+        for movie in movies
+        if isinstance(movie, dict) and movie.get('title')
+    ]
+
+    movielist = [x.strip() for x in movielist if x and x.strip()]
+    movielist = list(dict.fromkeys(movielist))
+
+    if DEBUG_MODE:
+        logger.info("[SPELL] movielist size=%s | sample=%s", len(movielist), movielist[:10])
+
+    if not movielist:
+        search_query = query.replace(" ", "+")
+        if webapp:
+            return {
+                "status": "not_found",
+                "query": query,
+                "files": [],
+                "total_results": 0,
+                "next_offset": "",
+                "suggestions": [],
+            }
+
+        buttons = [
+            [InlineKeyboardButton("Search Google", url=f"https://www.google.com/search?q={search_query}")],
+            [InlineKeyboardButton("Request Group", url="https://t.me/+GXTgHzS9LtViN2U9")]
+        ]
+        await msg.reply(
+            f"No valid movie titles found for **{query}**. Try searching on Google or in the request group.",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
+        return
+
+    SPELL_CHECK[mv_id] = movielist
+
+    try:
+        matched_movie = None
+        best_ratio = 60  # Only accept matches strictly better than 60
+
+        for title in movielist:
+            ratio = fuzz.ratio(query.lower(), title.lower())
+            logger.debug(f"Matching '{query}' with '{title}', Ratio: {ratio}")
+
+            if ratio > best_ratio:
+                best_ratio = ratio
+                matched_movie = title
+
+        if DEBUG_MODE:
+            logger.info("[SPELL] matched_movie=%r", matched_movie)
+
+        if matched_movie:
+            files, offset, total_results = await get_search_results(matched_movie.lower(), offset=0, filter=True)
+
+            if webapp:
+                if files:
+                    return {
+                        "status": "corrected",
+                        "query": query,
+                        "corrected_query": matched_movie,
+                        "files": files,
+                        "offset": offset,
+                        "total_results": total_results,
+                        "next_offset": offset,
+                    }
+                return {
+                    "status": "suggestions",
+                    "query": query,
+                    "suggestions": movielist[:10],
+                    "files": [],
+                    "total_results": 0,
+                    "next_offset": "",
+                }
+
+            if files:
+                await auto_filter(client, msg, (matched_movie, files, offset, total_results))
+                return
+
+        if webapp:
+            return {
+                "status": "suggestions",
+                "query": query,
+                "suggestions": movielist[:10],
+                "files": [],
+                "total_results": 0,
+                "next_offset": "",
+            }
+
+        search_query = query.replace(" ", "+")
+        buttons = [
+            [InlineKeyboardButton(movie.strip(), callback_data=f"spolling#{user_id}#{idx}")]
+            for idx, movie in enumerate(movielist[:10])
+        ]
+        buttons.append([InlineKeyboardButton("Search Google", url=f"https://www.google.com/search?q={search_query}")])
+        buttons.append([InlineKeyboardButton("Request Group", url="https://t.me/+GXTgHzS9LtViN2U9")])
+        buttons.append([InlineKeyboardButton("Close", callback_data=f"spolling#{user_id}#close_spellcheck")])
+
+        await msg.reply(
+            f"<b>No close matches found for **{query}**.</b>\n\n"
+            f"<b>Here are some suggestions:</b>",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
+        return
+
+    except Exception as e:
+        logger.error(f"Error during spell check for query '{query}': {e}")
+        if DEBUG_MODE:
+            logger.exception("[SPELL] fuzzy matching or follow-up flow failed")
+
+        if webapp:
+            return {
+                "status": "not_found",
+                "query": query,
+                "files": [],
+                "total_results": 0,
+                "next_offset": "",
+                "suggestions": [],
+            }
+
+        search_query = query.replace(" ", "+")
+        buttons = [
+            [InlineKeyboardButton("Search Google", url=f"https://www.google.com/search?q={search_query}")],
+            [InlineKeyboardButton("Request Group", url="https://t.me/+GXTgHzS9LtViN2U9")]
+        ]
+        await msg.reply(
+            "An error occurred while processing your request. Please try again or check the request group.",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
+        return
