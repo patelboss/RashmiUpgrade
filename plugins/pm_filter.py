@@ -1349,15 +1349,8 @@ async def auto_filter(client, msg, spoll=False, webapp=False):
             await message.reply_text(cap, reply_markup=InlineKeyboardMarkup(btn))
     else:
         await message.reply_text(cap, reply_markup=InlineKeyboardMarkup(btn))
-
-    #if spoll:
-       # await msg.message.delete()
-
-   # if spoll:
-       # await msg.message.delete()
-            
     if spoll:
-	    if hasattr(msg, "message") and msg.message:
+        if hasattr(msg, "message") and msg.message:
 			await msg.message.delete()
 		else:
 			await msg.delete()
@@ -1374,19 +1367,6 @@ from database.ia_filterdb import Media
 from utils import clean_file_name
 
 async def mongo_spell_fallback(query: str, limit: int = 250) -> list[dict]:
-    """
-    Lightweight MongoDB fallback for spell checking.
-
-    Returns:
-        IMDb-like list:
-        [
-            {
-                "title": "...",
-                "year": "2023" | None
-            }
-        ]
-    """
-
     if not query:
         return []
 
@@ -1642,15 +1622,6 @@ async def advantage_spell_chok(client, msg, webapp=False):
     SPELL_CHECK[mv_id] = movielist
 
     try:
-"""
-        matched_movie = None
-        for title in movielist:
-            ratio = fuzz.ratio(query.lower(), title.lower())
-            logger.debug(f"Matching '{query}' with '{title}', Ratio: {ratio}")
-            if ratio > 60:
-                matched_movie = title
-				break
-"""
         matched_movie = None
         best_ratio = 60  # Only accept matches strictly better than 60
         for title in movielist:
