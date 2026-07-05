@@ -1418,7 +1418,10 @@ async def advantage_spell_chok(client, msg, webapp=False):
     try:
         if DEBUG_MODE:
             logger.info("[SPELL] calling get_poster(query=%r, bulk=True)", query)
+        #movies = await get_poster(query, bulk=True)
         movies = await get_poster(query, bulk=True)
+        if not movies:
+            movies = await mongo_spell_fallback(query)
         logger.info("SpellCheck IMDb returned: %s", len(movies) if movies else 0)
 
         if DEBUG_MODE and movies:
