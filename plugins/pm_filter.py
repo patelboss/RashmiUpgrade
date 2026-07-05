@@ -1350,8 +1350,15 @@ async def auto_filter(client, msg, spoll=False, webapp=False):
     else:
         await message.reply_text(cap, reply_markup=InlineKeyboardMarkup(btn))
 
-    if spoll:
-        await msg.message.delete()
+    #if spoll:
+       # await msg.message.delete(
+
+	if spoll:
+		if hasattr(msg, "message") and msg.message:
+            await msg.message.delete()
+        else:
+            await msg.delete()
+			
 
 
 import asyncio
@@ -1632,7 +1639,7 @@ async def advantage_spell_chok(client, msg, webapp=False):
     SPELL_CHECK[mv_id] = movielist
 
     try:
-		"""
+"""
         matched_movie = None
         for title in movielist:
             ratio = fuzz.ratio(query.lower(), title.lower())
@@ -1640,7 +1647,7 @@ async def advantage_spell_chok(client, msg, webapp=False):
             if ratio > 60:
                 matched_movie = title
 				break
-		"""
+"""
         matched_movie = None
         best_ratio = 60  # Only accept matches strictly better than 60
         for title in movielist:
