@@ -1357,10 +1357,10 @@ async def auto_filter(client, msg, spoll=False, webapp=False):
        # await msg.message.delete()
             
 	if spoll:
-        if hasattr(msg, "message") and msg.message:
-            await msg.message.delete()
-        else:
-            await msg.delete()
+		if hasattr(msg, "message") and msg.message:
+			await msg.message.delete()
+		else:
+			await msg.delete()
 			
 
 
