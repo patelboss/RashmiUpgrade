@@ -169,7 +169,7 @@ async function doSearch(reset = true) {
       q:         state.query,
       offset:    state.offset,
       max:       state.pageSize,
-      init_data: window.Telegram?.WebApp?.initData || ""
+      init_data: tg?.initData || ""
     });
     if (state.fileType) params.set('type', state.fileType);
 
