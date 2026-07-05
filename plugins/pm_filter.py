@@ -1356,7 +1356,7 @@ async def auto_filter(client, msg, spoll=False, webapp=False):
    # if spoll:
        # await msg.message.delete()
             
-	if spoll:
+    if spoll:
 		if hasattr(msg, "message") and msg.message:
 			await msg.message.delete()
 		else:
