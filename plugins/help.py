@@ -21,7 +21,7 @@ from pyrogram.types import (
     InlineKeyboardButton, InlineKeyboardMarkup
 )
 from pyrogram.enums import ParseMode
-
+from plugins.Extra.Cscript import TEXTS
 from info import ADMINS
 from database.users_chats_db import db
 from langs.i18n import get, get_btn, LANGUAGE_MENU, LANGUAGES
@@ -264,3 +264,22 @@ async def language_command(client: Client, message: Message):
         reply_markup=_lang_kb(),
         parse_mode=ParseMode.HTML
     )
+# Command to show help for /chelp
+@Client.on_message(filters.command("chelp"))
+async def chelp(client, message: Message):
+    # Check if the user added "m" after the command
+    command_parts = message.text.split()
+    use_html = len(command_parts) > 1 and command_parts[1].lower() == "m"
+
+    # Send the sticker first
+    sticker_id = get_random_sticker()
+    m = await message.reply_sticker(sticker_id, 'CAACAgIAAxkBAAEWouFnYZdWgByiIdBga-j3bXRMK7sL3QACYgADTlzSKU6iwxhIxCtxHgQ')  # Default sticker ID if missing
+    await asyncio.sleep(2)  # Wait for 2 seconds
+    await m.delete()  # Delete the sticker message
+
+    if use_html:
+        # Send the help text in HTML format
+        await message.reply(TEXTS.get("HELP_TEXT", "<b>Help text not available.</b>"), parse_mode=ParseMode.HTML)
+    else:
+        # Send the available text methods in Markdown format
+        await message.reply(TEXTS.get("AVAILABLE_TEXT_METHODS", "**Available methods not found.**"), parse_mode=ParseMode.MARKDOWN)
