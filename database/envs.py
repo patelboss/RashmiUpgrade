@@ -12,13 +12,13 @@ from pymongo import UpdateOne
 import hashlib
 import json
 from datetime import datetime
-
+from info import FILE_DB_URI
 # Function to generate a unique batch ID (e.g., BATCH-XXXXXXXXXX-01)
 from pymongo import MongoClient
 from datetime import datetime
 import hashlib
 import logging
-FILE_DB_URI1 = "mongodb+srv://TelegramBot:TelegramBot@cluster0.42rlp.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+
 DATABASE_NAME1 = "database_name"
 COLLECTIONB_NAME1 = "env_config"
 # Ensure that MongoDB client and collections are initialized properly
@@ -31,7 +31,7 @@ from pymongo.errors import PyMongoError
 
 try:
     # MongoDB connection setup
-    client = MongoClient(FILE_DB_URI1)
+    client = MongoClient(FILE_DB_URI)
     
     # Accessing the database
     db = client[DATABASE_NAME1]
