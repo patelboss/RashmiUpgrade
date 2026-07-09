@@ -106,104 +106,6 @@ def _meaningful_char_count(q: str) -> int:
 
 
 # ── 🚀 UNIFIED WEB SEARCH THROUGH REAL CHAT AUTOFILTERS ───────────────────
-"""
-@api_routes.get("/api/search")
-async def api_search(request: web.Request) -> web.Response:
-    from pyrogram.enums import ChatType
-    from plugins.pm_filter import auto_filter
-
-    raw_q = request.rel_url.query.get("q", "").strip()
-
-    try:
-        offset = max(0, int(request.rel_url.query.get("offset", 0)))
-    except Exception:
-        offset = 0
-
-    try:
-        max_res = min(max(1, int(request.rel_url.query.get("max", 15))), 50)
-    except Exception:
-        max_res = 15
-
-    file_type = request.rel_url.query.get("type", "") or None
-    init_data = request.rel_url.query.get("init_data", "")
-    user_id = _verify_and_extract_user(init_data) or 0
-    logger.info("WebApp Search User resolved: %s", user_id )
-
-    # 1. Clean query
-    q = _clean_search_query(raw_q)
-    q_char_count = _meaningful_char_count(q)
-
-    logger.info(
-        "Incoming Search Request -> Raw: '%s' | Cleaned: '%s' | MeaningfulChars: %s",
-        raw_q,
-        q,
-        q_char_count,
-    )
-
-    # 2. Reject short / junk queries before touching filter paths
-    if not q or q_char_count < 3:
-        logger.warning(
-            "⚠️ WebApp Search Rejected Early. Raw: '%s' | Cleaned: '%s' | MeaningfulChars: %s",
-            raw_q,
-            q,
-            q_char_count,
-        )
-        return web.json_response({"files": [], "total_results": 0, "next_offset": ""})
-
-    bot_client = request.app.get("bot_client")
-    if not bot_client:
-        return web.json_response({"error": "Core framework offline"}, status=503)
-
-    try:
-        DUMMY_CHAT_ID = -1001860020592
-        mock_chat = type("MockChat", (object,), {"id": DUMMY_CHAT_ID, "type": ChatType.SUPERGROUP})()
-
-        mock_msg = type(
-            "MockMessage",
-            (object,),
-            {
-                "id": 1,
-                "chat": mock_chat,
-                "text": q,
-                #"from_user": type("MockUser", (object,), {"id": 0})(),
-                "from_user": type( "MockUser", (object,),{ "id": user_id, "first_name": "WebApp User" })(), 
-            }
-        )()
-
-        # 3. Execute your core chat filtering
-        await auto_filter(bot_client, mock_msg)
-
-        # 4. Pull from cache layer
-        key = f"{DUMMY_CHAT_ID}-1"
-        cached_results = temp.GETALL.get(key, [])
-
-        if cached_results:
-            files = cached_results[offset: offset + max_res]
-            total = len(cached_results)
-            next_offset = offset + len(files) if total > offset + max_res else ""
-            logger.info("✨ Search serving from cache matrix framework memory! Found %s items.", total)
-        else:
-            # Fall back to MongoDB using the cleaned query, preserving spaces
-            files, next_offset, total = await get_search_results(
-                query=q.lower(),
-                file_type=file_type,
-                max_results=max_res,
-                offset=offset,
-            )
-            logger.info("📁 Cache expired. Dispatched lookup straight to MongoDB. Results: %s", total)
-
-        return web.json_response(
-            {
-                "files": [_serialize_file(f) for f in files],
-                "total_results": total,
-                "next_offset": next_offset,
-            }
-        )
-    except Exception as exc:
-        logger.exception("Unified Filter Search API error for query '%s': %s", q, exc)
-        return web.json_response({"error": "Search failed"}, status=500)
-
-"""
 @api_routes.get("/api/search")
 async def api_search(request: web.Request) -> web.Response:
     from pyrogram.enums import ChatType
@@ -383,7 +285,7 @@ async def api_stats(request: web.Request) -> web.Response:
     global _STATS_CACHE, _CACHE_EXPIRE_TIME
 
     force_refresh = request.rel_url.query.get("refresh", "").lower() == "true"
-    now = datetime.datetime.now()
+    now = datetime.now()
 
     bot_client = request.app.get("bot_client")
     if not bot_client:
