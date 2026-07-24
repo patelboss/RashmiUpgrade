@@ -579,7 +579,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
             InlineKeyboardButton(get_btn(lang, "BTN_SEARCH_STYLE"), switch_inline_query_current_chat=''),
             InlineKeyboardButton(get_btn(lang, "BTN_GROUP_STYLE"), url='https://t.me/filmykeedha_search')
         ], [
-            InlineKeyboardButton(get_btn(lang, "BTN_HELP_STYLE"), callback_data='help'),
+            InlineKeyboardButton(get_btn(lang, "BTN_HELP_STYLE"), callback_data='help:main'),
             InlineKeyboardButton(get_btn(lang, "BTN_ABOUT_STYLE"), callback_data='about')
         ]]
         reply_markup = InlineKeyboardMarkup(buttons)
@@ -631,7 +631,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         )
     elif query.data == "manuelfilter":
         buttons = [[
-            InlineKeyboardButton(get_btn(lang, "BTN_BACK_STYLIZED"), callback_data='help'),
+            InlineKeyboardButton(get_btn(lang, "BTN_BACK_STYLIZED"), callback_data='help:main'),
             InlineKeyboardButton(get_btn(lang, "BTN_BUTTONS_LABEL"), callback_data='button')
         ]]
         reply_markup = InlineKeyboardMarkup(buttons)
@@ -652,7 +652,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         )
     elif query.data == "autofilter":
         buttons = [[
-            InlineKeyboardButton(get_btn(lang, "BTN_BACK_STYLIZED"), callback_data='help')
+            InlineKeyboardButton(get_btn(lang, "BTN_BACK_STYLIZED"), callback_data='help:main')
         ]]
         reply_markup = InlineKeyboardMarkup(buttons)
         await query.message.edit_text(
@@ -662,7 +662,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         )
     elif query.data == "coct":
         buttons = [[
-            InlineKeyboardButton(get_btn(lang, "BTN_BACK_STYLIZED"), callback_data='help')
+            InlineKeyboardButton(get_btn(lang, "BTN_BACK_STYLIZED"), callback_data='help:main')
         ]]
         reply_markup = InlineKeyboardMarkup(buttons)
         await query.message.edit_text(
@@ -672,7 +672,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         )
     elif query.data == "extra":
         buttons = [[
-            InlineKeyboardButton(get_btn(lang, "BTN_BACK_STYLIZED"), callback_data='help'),
+            InlineKeyboardButton(get_btn(lang, "BTN_BACK_STYLIZED"), callback_data='help:main'),
             InlineKeyboardButton(get_btn(lang, "BTN_ADMIN_MENU"), callback_data='admin')
         ]]
         reply_markup = InlineKeyboardMarkup(buttons)
@@ -683,7 +683,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         )
     elif query.data == "admin":
         buttons = [[
-            InlineKeyboardButton(get_btn(lang, "BTN_BACK_STYLIZED"), callback_data='extra')
+            InlineKeyboardButton(get_btn(lang, "BTN_BACK_STYLIZED"), callback_data='start')
         ]]
         reply_markup = InlineKeyboardMarkup(buttons)
         await query.message.edit_text(
@@ -693,7 +693,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         )
     elif query.data == "stats":
         buttons = [[
-            InlineKeyboardButton(get_btn(lang, "BTN_BACK_STYLIZED"), callback_data='help'),
+            InlineKeyboardButton(get_btn(lang, "BTN_BACK_STYLIZED"), callback_data='help:main'),
             InlineKeyboardButton(get_btn(lang, "BTN_REFRESH_ICON"), callback_data='rfrsh')
         ]]
         reply_markup = InlineKeyboardMarkup(buttons)
@@ -712,7 +712,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
     elif query.data == "rfrsh":
         await query.answer(get(lang, "FETCHING_DB"))
         buttons = [[
-            InlineKeyboardButton(get_btn(lang, "BTN_BACK_STYLIZED"), callback_data='help'),
+            InlineKeyboardButton(get_btn(lang, "BTN_BACK_STYLIZED"), callback_data='help:main'),
             InlineKeyboardButton(get_btn(lang, "BTN_REFRESH_ICON"), callback_data='rfrsh')
         ]]
         reply_markup = InlineKeyboardMarkup(buttons)
