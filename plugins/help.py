@@ -125,7 +125,7 @@ def _category_kb(lang: str, cat: dict) -> InlineKeyboardMarkup:
         ])
     rows.append([
         InlineKeyboardButton(get_btn(lang, "BTN_BACK"),      callback_data="help:main"),
-        InlineKeyboardButton(get_btn(lang, "BTN_MAIN_MENU"), callback_data="help:main"),
+        InlineKeyboardButton(get_btn(lang, "BTN_MAIN_MENU"), callback_data="start"),
     ])
     return InlineKeyboardMarkup(rows)
 
