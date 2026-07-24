@@ -121,7 +121,7 @@ async def start(client, message: Message):
                 InlineKeyboardButton(get_btn(lang, "BTN_GROUP"),  url=GRP_LNK),
             ],
             [
-                InlineKeyboardButton(get_btn(lang, "BTN_HELP"),  callback_data="help"),
+                InlineKeyboardButton(get_btn(lang, "BTN_HELP"),  callback_data="help:main"),
                 InlineKeyboardButton(get_btn(lang, "BTN_ABOUT"), callback_data="about"),
             ],
         ]
@@ -176,7 +176,7 @@ async def start(client, message: Message):
                 InlineKeyboardButton(get_btn(lang, "BTN_GROUP"),  url=GRP_LNK),
             ],
             [
-                InlineKeyboardButton(get_btn(lang, "BTN_HELP"),  callback_data="help"),
+                InlineKeyboardButton(get_btn(lang, "BTN_HELP"),  callback_data="help:main"),
                 InlineKeyboardButton(get_btn(lang, "BTN_ABOUT"), callback_data="about"),
             ],
         ]
