@@ -232,46 +232,52 @@ class EN:
     # Category descriptions shown when user taps a category button
     HELP_CAT_SEARCH = (
         "<b>🔍 Search & Files</b>\n\n"
-        "• Tap <b>Search 🔍</b> in the inline button to search any movie or file.\n"
-        "• In any connected group, just <b>type the movie name</b> — results appear automatically.\n"
-        "• Use <b>/index</b> (reply to last channel msg) to index a channel's files into the database.\n"
-        "• <b>/setskip N</b> — Skip first N messages while indexing."
+        "• Tap <b>Search 🔍</b> or just <b>type a movie/series name</b> in a connected group — results appear automatically.\n\n"
+        "• <code>/index</code> — reply to the last forwarded message from a channel (or a t.me link) to index that channel's files into the database. Non-admin requests are sent to moderators for approval.\n\n"
+        "• <code>/setskip N</code> — skip the first N messages while indexing a channel. (Bot admins only)"
     )
     HELP_CAT_FILTERS = (
         "<b>⚙️ Filters</b>\n\n"
-        "Filters let the bot auto-reply to specific keywords.\n\n"
-        "<b>Commands:</b>\n"
-        "• /addfilter (or /addf) — Add a keyword filter\n"
-        "• /filters (or /viewfilters) — List all filters in a chat\n"
-        "• /delelefilter — Remove a specific filter\n"
-        "• /deleteallf — Remove all filters (owner only)\n\n"
-        "<b>NOTE:</b> Bot must have admin privileges."
+        "Filters make the bot auto-reply to specific keywords in a group.\n\n"
+        "• <code>/addfilter keyword</code> (or <code>/addf</code>) — reply to a message to save it as a filter for that keyword.\n\n"
+        "• <code>/viewfilters</code> (or <code>/filters</code>) — list every filter saved in the current or connected group.\n\n"
+        "• <code>/delelefilter keyword</code> — remove one filter by keyword.\n\n"
+        "• <code>/deleteallf</code> — remove every filter in the group. (Owner only)\n\n"
+        "<b>NOTE:</b> the bot needs admin rights in the group."
     )
     HELP_CAT_CONNECT = (
         "<b>🔗 Connections</b>\n\n"
-        "Connect the bot to your group PM so you can manage filters without spamming the group.\n\n"
-        "<b>Commands:</b>\n"
-        "• /connect [group_id] — Connect group to your PM\n"
-        "• /disconnect — Disconnect from a group\n"
-        "• /connections — List all your connections\n\n"
-        "<b>NOTE:</b> Only group admins can connect."
+        "Connect a group to your PM so you can manage it without spamming the group chat.\n\n"
+        "• <code>/connect group_id</code> (in PM) or <code>/connect</code> (inside the group) — link a group to your account.\n\n"
+        "• <code>/disconnect</code> — unlink the currently active group.\n\n"
+        "• <code>/connections</code> — list your connected groups and switch which one is active.\n\n"
+        "<b>NOTE:</b> only group admins can connect."
     )
     HELP_CAT_EXTRA = (
         "<b>🎛️ Extra Features</b>\n\n"
-        "• /id — Get ID of a user or channel\n"
-        "• /info — Get user details\n"
-        "• /imdb — Fetch movie info from IMDB\n"
-        "• /cpost — Post in a channel via bot\n"
-        "• /ppost — Private post (no copy/forward)\n"
-        "• /feedback (or /report) — Report an issue to admin\n"
-        "• /talk — Talk to admin with a code\n"
-        "• /ping — Check bot response speed\n"
-        "• /alive — Check if bot is online\n"
-        "• /donate — Support the bot\n"
-        "• /set_template — Set a custom file-caption template (group admins)\n"
-        "• /getfileid — Reply to a file to get its file_id\n"
-        "• /settings — Configure group search settings (group admins)\n"
-        "• /language — Change your bot language"
+        "• <code>/id</code> — get the ID of the current chat, or a replied user/channel.\n\n"
+        "• <code>/info [reply|user_id|username]</code> — show details about a user.\n\n"
+        "• <code>/imdb title</code> — search IMDb for a movie or series.\n\n"
+        "• <code>/getfileid</code> (reply to media) — get that file's file_id.\n\n"
+        "• <code>/alive</code> / <code>/ping</code> — check that the bot is online and measure its response time.\n\n"
+        "• <code>/stats</code> — show database and storage stats.\n\n"
+        "• <code>/language</code> — change your bot language.\n\n"
+        "• <code>/set_template text</code> — set a custom file-caption template for your current/connected group.\n\n"
+        "• <code>/donate</code> — see how to support the bot.\n\n"
+        "• <code>/webapp</code> — open the media search Web App directly in Telegram.\n\n"
+        "• <code>/chelp [m]</code> — alternate help text (add <code>m</code> for HTML mode).\n\n"
+        "• <code>/wtry</code> / <code>/wtry2</code> — diagnostic pings confirming the webapp/misc handler files are loaded."
+    )
+    HELP_CAT_POSTING = (
+        "<b>📤 Media Posting</b>\n\n"
+        "• <code>/cpost channel_id [m]</code> — reply to a message (media or text) to post it into that channel. Add <code>m</code> to parse the caption as Markdown instead of HTML.\n\n"
+        "• <code>/ppost channel_id [m]</code> — same as <code>/cpost</code>, but the copy is protected from forwarding or saving.\n\n"
+        "<b>NOTE:</b> you and the bot both need admin rights with post-message permission in that channel."
+    )
+    HELP_CAT_CONTACT = (
+        "<b>📨 Contact & Feedback</b>\n\n"
+        "• <code>/feedback</code> (or <code>/report</code>) — reply to a message to send it to the admins as feedback or an issue report.\n\n"
+        "• <code>/talk secret_code</code> — reply to a message with a code the admin gave you, to send it directly to them."
     )
     HELP_CAT_FSUB = (
         "<b>🔐 Force Subscribe</b>\n\n"
@@ -282,28 +288,35 @@ class EN:
         "• /id — Get a channel's ID (useful when setting up AUTH_CHANNEL)"
     )
     HELP_CAT_ADMIN = (
-        "<b>🛠 Admin Commands</b>\n\n"
-        "• /stats — Database status\n"
-        "• /logs — Get recent error logs\n"
-        "• /delete — Delete a file from DB\n"
-        "• /deleteall — Delete all indexed files\n"
-        "• /scrub — Bulk delete DB files by pattern\n"
-        "• /users — List all users\n"
-        "• /chats — List all chats\n"
-        "• /ban — Ban a user\n"
-        "• /unban — Unban a user\n"
-        "• /leave — Leave a chat\n"
-        "• /disable — Disable a chat\n"
-        "• /enable — Re-enable a disabled chat\n"
-        "• /invite — Generate a chat invite link\n"
-        "• /broadcast — Broadcast to all users\n"
-        "• /grp_broadcast — Broadcast to all groups\n"
-        "• /channel — List indexed channels\n"
-        "• /batch or /pbatch — Create a multi-file batch link\n"
-        "• /create_code — Create a secret talk-to-admin code\n"
-        "• /delete_code — Delete a secret talk-to-admin code\n"
-        "• /send — Reply to a user's /talk message to respond\n"
-        "• /restart — Restart the bot"
+        "<b>🛠 Group Admin</b>\n\n"
+        "• <code>/leave chat_id</code> — make the bot leave a chat.\n\n"
+        "• <code>/disable chat_id [reason]</code> — stop the bot from working in a chat.\n\n"
+        "• <code>/enable chat_id</code> — re-enable a previously disabled chat.\n\n"
+        "• <code>/invite chat_id</code> — generate an invite link for a chat.\n\n"
+        "• <code>/ban user_id [reason]</code> / <code>/unban user_id [reason]</code> — ban or unban a user from using the bot.\n\n"
+        "• <code>/users</code> / <code>/chats</code> — export all stored users or chats to a text file."
+    )
+    HELP_CAT_ADMIN_BOT = (
+        "<b>🤖 Bot Admin</b>\n\n"
+        "• <code>/settings</code> — open the settings panel for the current/connected group.\n\n"
+        "• <code>/restart</code> — restart the bot.\n\n"
+        "• <code>/logs</code> — send the recent log file.\n\n"
+        "• <code>/channel</code> — list indexed channels/groups.\n\n"
+        "• <code>/delete</code> (reply to a file) — delete that file's DB record.\n\n"
+        "• <code>/deleteall</code> — start the flow to delete every indexed file.\n\n"
+        "• <code>/scrub pattern size</code> — bulk-delete DB entries matching a pattern and size filter.\n\n"
+        "• <code>/broadcast</code> / <code>/grp_broadcast</code> — broadcast a message to all users, or all groups.\n\n"
+        "• <code>/batch link1 link2 ...</code> (or <code>/pbatch</code>) — build a batch link from multiple file links.\n\n"
+        "• <code>/send user_id</code> (reply to your message) — send a copied message to a user without the forward tag.\n\n"
+        "• <code>/create_code</code> / <code>/delete_code</code> — create or delete a secret code for <code>/talk</code>."
+    )
+    HELP_CAT_ADMIN_ENV = (
+        "<b>🧩 Environment Config</b>\n\n"
+        "• <code>/add_env config key value</code> — add a key/value pair to a named config.\n\n"
+        "• <code>/get_envs config</code> — show all variables stored for a config.\n\n"
+        "• <code>/all_envs</code> — list every stored config.\n\n"
+        "• <code>/update_env config key new_value</code> — update a key in a config.\n\n"
+        "• <code>/delete_env config key</code> — delete a key from a config."
     )
 
     # ── Guide tooltips (query.answer popups) ─────────────────────────────────
@@ -436,8 +449,12 @@ class EN:
     BTN_CAT_FILTERS    = "⚙️ Filters"                # Help menu — category button
     BTN_CAT_CONNECT    = "🔗 Connections"             # Help menu — category button
     BTN_CAT_EXTRA      = "🎛️ Extra Features"          # Help menu — category button
+    BTN_CAT_POSTING    = "📤 Media Posting"           # Help menu — category button
+    BTN_CAT_CONTACT    = "📨 Contact & Feedback"      # Help menu — category button
     BTN_CAT_FSUB       = "🔐 Force Subscribe"         # Help menu — category button
-    BTN_CAT_ADMIN      = "🛠 Admin"                   # Help menu — category button (admins only)
+    BTN_CAT_ADMIN      = "🛠 Group Admin"             # Help menu — category button (admins only) — was "Admin", split into 3 admin pages
+    BTN_CAT_ADMIN_BOT  = "🤖 Bot Admin"               # Help menu — category button (admins only)
+    BTN_CAT_ADMIN_ENV  = "🧩 Env Config"              # Help menu — category button (admins only)
 
     # ── plugins/pm_filter_callbacks.py — callback dispatcher ─────────────────
     NOT_FOR_YOU_ALERT = "This Message is not for you dear. Don't worry you can send new one !"  # next_page / spell-check guard
@@ -915,7 +932,7 @@ class HI(EN):
     BTN_CAT_CONNECT  = "🔗 कनेक्शन"                     # Help — connections category
     BTN_CAT_EXTRA    = "🎛️ अतिरिक्त सुविधाएं"          # Help — extra category
     BTN_CAT_FSUB     = "🔐 बाध्य सदस्यता"               # Help — fsub category
-    BTN_CAT_ADMIN    = "🛠 एडमिन"                        # Help — admin category
+    BTN_CAT_ADMIN    = "🛠 समूह एडमिन"                    # Help — admin category (renamed to Group Admin, matches EN)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
