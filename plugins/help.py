@@ -71,6 +71,20 @@ HELP_CATEGORIES = [
         "admin_only": False,
     },
     {
+        "key":       "posting",
+        "btn_key":   "BTN_CAT_POSTING",
+        "content":   "HELP_CAT_POSTING",
+        "guides": [],
+        "admin_only": False,
+    },
+    {
+        "key":       "contact",
+        "btn_key":   "BTN_CAT_CONTACT",
+        "content":   "HELP_CAT_CONTACT",
+        "guides": [],
+        "admin_only": False,
+    },
+    {
         "key":       "fsub",
         "btn_key":   "BTN_CAT_FSUB",
         "content":   "HELP_CAT_FSUB",
@@ -81,6 +95,20 @@ HELP_CATEGORIES = [
         "key":       "admin",
         "btn_key":   "BTN_CAT_ADMIN",
         "content":   "HELP_CAT_ADMIN",
+        "guides": [],
+        "admin_only": True,   # only shown to ADMINS
+    },
+    {
+        "key":       "admin_bot",
+        "btn_key":   "BTN_CAT_ADMIN_BOT",
+        "content":   "HELP_CAT_ADMIN_BOT",
+        "guides": [],
+        "admin_only": True,   # only shown to ADMINS
+    },
+    {
+        "key":       "admin_env",
+        "btn_key":   "BTN_CAT_ADMIN_ENV",
+        "content":   "HELP_CAT_ADMIN_ENV",
         "guides": [],
         "admin_only": True,   # only shown to ADMINS
     },
@@ -125,7 +153,7 @@ def _category_kb(lang: str, cat: dict) -> InlineKeyboardMarkup:
         ])
     rows.append([
         InlineKeyboardButton(get_btn(lang, "BTN_BACK"),      callback_data="help:main"),
-        InlineKeyboardButton(get_btn(lang, "BTN_MAIN_MENU"), callback_data="start"),
+        InlineKeyboardButton(get_btn(lang, "BTN_MAIN_MENU"), callback_data="help:main"),
     ])
     return InlineKeyboardMarkup(rows)
 
