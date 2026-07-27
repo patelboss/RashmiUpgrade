@@ -337,7 +337,7 @@ class EN:
     BTN_GROUP          = "✪ GROUP ✪"                  # Start msg — link to main group
     BTN_HELP           = "🙆🏻 Help 🦾"                # Start msg & callbacks
     BTN_ABOUT          = "♥️ About ♥️"                # Start msg & callbacks
-    BTN_ADD_TO_GROUP   = "➕ Add Me to Your Group ➕"  # Start msg after subscribe
+    BTN_ADD_TO_GROUP   = "➕↖️ 𝗔𝗱𝗱 𝗠𝗲 𝗧𝗼 𝗬𝗼𝘂𝗿 𝗚𝗿𝗼𝘂𝗽𝘀↗️➕"  # Start msg after subscribe
 
     # Navigation / general UI
     BTN_BACK           = "◀️ Back"                    # Help menu — back to category list
@@ -495,7 +495,7 @@ class EN:
     BTN_BACK_PLAIN           = "BACK"                             # groupcb — back to connections list
     BTN_HOME                 = "🏠 𝗛𝗼𝗺𝗲"                         # help menu — jumps back to /start
     BTN_CLOSE_LOCK_STYLE     = "🔐 𝗖𝗹𝗼𝘀𝗲"                        # help menu — close/delete
-    BTN_ADD_TO_GROUP_STYLE   = "➕↖️ 𝗔𝗱𝗱 𝗠𝗲 𝗧𝗼 𝗬𝗼𝘂𝗿 𝗚𝗿𝗼𝘂𝗽𝘀\nमुझे GROUP में add करे। ↗️➕"  # start callback
+    BTN_ADD_TO_GROUP_STYLE   = "➕↖️ 𝗔𝗱𝗱 𝗠𝗲 𝗧𝗼 𝗬𝗼𝘂𝗿 𝗚𝗿𝗼𝘂𝗽𝘀↗️➕"  # start callback
     BTN_SEARCH_STYLE         = "🧞‍♀️ 𝗦𝗲𝗮𝗿𝗰𝗵 🧐"                  # start callback
     BTN_GROUP_STYLE          = "✪𝙂𝙍𝙊𝙐𝙋✪"                         # start callback
     BTN_HELP_STYLE           = "🙆🏻 𝗛𝗲𝗹𝗽 🦾"                     # start callback
