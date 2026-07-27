@@ -29,7 +29,7 @@ async def pm_broadcast(client, message):
         total_users = await db.total_users_count()
         done, blocked, deleted, failed, success = 0, 0, 0, 0, 0
 
-        start_time = datetime.datetime.now()
+        start_time = datetime.now()
 
         async for user in users:
             if 'id' in user:
@@ -70,7 +70,7 @@ async def pm_broadcast(client, message):
                 if not done % 20:
                     await sts.edit(f"Broadcast in progress:\n\nTotal Users: {total_users}\nCompleted: {done}\nSuccess: {success}\nBlocked: {blocked}\nDeleted: {deleted}\nFailed: {failed}")
 
-        time_taken = datetime.datetime.now() - start_time
+        time_taken = datetime.now() - start_time
         await sts.edit(f"Broadcast Completed:\n\nTime Taken: {time_taken}\n\nTotal Users: {total_users}\nCompleted: {done}\nSuccess: {success}\nBlocked: {blocked}\nDeleted: {deleted}\nFailed: {failed}")
     except Exception as e:
         logger.error(f"Error in pm_broadcast: {e}")
@@ -97,7 +97,7 @@ async def broadcast_group(bot, message):
         total_groups = await db.total_chat_count()
         done, failed, success = 0, 0, 0
 
-        start_time = datetime.datetime.now()
+        start_time = datetime.now()
 
         async for group in groups:
             if 'id' in group:
@@ -123,7 +123,7 @@ async def broadcast_group(bot, message):
                 if not done % 20:
                     await sts.edit(f"Broadcast in progress:\n\nTotal Groups: {total_groups}\nCompleted: {done}\nSuccess: {success}\nFailed: {failed}")
 
-        time_taken = datetime.datetime.now() - start_time
+        time_taken = datetime.now() - start_time
         await sts.edit(f"Broadcast Completed:\n\nTime Taken: {time_taken}\n\nTotal Groups: {total_groups}\nCompleted: {done}\nSuccess: {success}\nFailed: {failed}")
     except Exception as e:
         logger.error(f"Error in broadcast_group: {e}")
