@@ -584,16 +584,12 @@ async def cb_handler(client: Client, query: CallbackQuery):
         reply_markup = InlineKeyboardMarkup(buttons)
         
         # Matched directly to your script.START template variables
-        text_content = script.START.format(
-            name=query.from_user.mention,
-            uname=temp.U_NAME,
-            bname=temp.B_NAME
-        )
+        #text_content = script.START.format( name=query.from_user.mention, uname=temp.U_NAME,           bname=temp.B_NAME)
         
         
         await query.message.edit_text(
-          #  text=script.START_TXT.format(query.from_user.mention, temp.U_NAME, temp.B_NAME),
-            text=text_content,
+            text=script.START_TXT.format(name=query.from_user.mention, uname=temp.U_NAME, bname=temp.B_NAME),
+            #text=text_content,
             reply_markup=reply_markup,
             parse_mode=enums.ParseMode.HTML
         )
