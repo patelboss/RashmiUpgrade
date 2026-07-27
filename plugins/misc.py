@@ -6,7 +6,7 @@ from utils import extract_user, get_file_id, get_poster, last_online
 from database.users_chats_db import db
 from langs.i18n import get, get_btn
 import time
-from datetime import datetime
+import datetime
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 import logging
 logger = logging.getLogger(__name__)
@@ -113,7 +113,7 @@ async def who_is(client, message):
         try:
             chat_member_p = await message.chat.get_member(from_user.id)
             joined_date = (
-                chat_member_p.joined_date or datetime.now()
+                chat_member_p.joined_date or datetime.datetime.now()
             ).strftime("%Y.%m.%d %H:%M:%S")
             message_out_str += (
                 "<b>➲Joined this Chat on:</b> <code>"
