@@ -584,11 +584,18 @@ async def cb_handler(client: Client, query: CallbackQuery):
         reply_markup = InlineKeyboardMarkup(buttons)
            # Pass keyword arguments matching your template variables
         text_content = script.START_TXT.format(
+            query.from_user.mention,  # 0: for positional {}
+            temp.U_NAME,              # 1: for positional {}
+            temp.B_NAME,              # 2: for positional {}
             mention=query.from_user.mention,
+            first=query.from_user.first_name,
             name=query.from_user.first_name,
+            uname=temp.U_NAME,
             username=temp.U_NAME,
-            bot_name=temp.B_NAME
+            bot_name=temp.B_NAME,
+            bname=temp.B_NAME
         )
+
         
         await query.message.edit_text(
           #  text=script.START_TXT.format(query.from_user.mention, temp.U_NAME, temp.B_NAME),
