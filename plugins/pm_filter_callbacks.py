@@ -582,20 +582,14 @@ async def cb_handler(client: Client, query: CallbackQuery):
             InlineKeyboardButton(get_btn(lang, "BTN_HELP_STYLE"), callback_data='help:main'),
         ]]
         reply_markup = InlineKeyboardMarkup(buttons)
-           # Pass keyword arguments matching your template variables
-        text_content = script.START_TXT.format(
-            query.from_user.mention,  # 0: for positional {}
-            temp.U_NAME,              # 1: for positional {}
-            temp.B_NAME,              # 2: for positional {}
-            mention=query.from_user.mention,
-            first=query.from_user.first_name,
-            name=query.from_user.first_name,
+        
+        # Matched directly to your script.START template variables
+        text_content = script.START.format(
+            name=query.from_user.mention,
             uname=temp.U_NAME,
-            username=temp.U_NAME,
-            bot_name=temp.B_NAME,
             bname=temp.B_NAME
         )
-
+        
         
         await query.message.edit_text(
           #  text=script.START_TXT.format(query.from_user.mention, temp.U_NAME, temp.B_NAME),
