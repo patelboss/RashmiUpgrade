@@ -574,12 +574,12 @@ async def cb_handler(client: Client, query: CallbackQuery):
         await query.answer()
     elif query.data == "start":
         buttons = [[
-            InlineKeyboardButton(get_btn(lang, "BTN_ADD_TO_GROUP_STYLE"), url=f'http://t.me/{temp.U_NAME}?startgroup=true')
+            InlineKeyboardButton(get_btn(lang, "BTN_ADD_TO_GROUP"), url=f'http://t.me/{temp.U_NAME}?startgroup=true')
         ], [
-            InlineKeyboardButton(get_btn(lang, "BTN_SEARCH_STYLE"), switch_inline_query_current_chat=''),
-            InlineKeyboardButton(get_btn(lang, "BTN_GROUP_STYLE"), url='https://t.me/filmykeedha_search')
+            InlineKeyboardButton(get_btn(lang, "BTN_SEARCH"), switch_inline_query_current_chat=''),
+            InlineKeyboardButton(get_btn(lang, "BTN_GROUP"), url='https://t.me/filmykeedha_search')
         ], [
-            InlineKeyboardButton(get_btn(lang, "BTN_HELP_STYLE"), callback_data='help:main'),
+            InlineKeyboardButton(get_btn(lang, "BTN_HELP"), callback_data='help:main'),
         ]]
         reply_markup = InlineKeyboardMarkup(buttons)
         
