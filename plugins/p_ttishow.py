@@ -1,5 +1,5 @@
 import logging
-
+import asyncio
 from pyrogram import Client, filters, enums
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from pyrogram.errors.exceptions.bad_request_400 import MessageTooLong, PeerIdInvalid
@@ -7,7 +7,7 @@ from info import ADMINS, LOG_CHANNEL, SUPPORT_CHAT, MELCOW_NEW_USERS, CHNL_LNK, 
 from database.users_chats_db import db
 from database.ia_filterdb import Media
 from utils import get_size, temp, get_settings
-from Script import script
+#from Script import script
 from pyrogram.errors import ChatAdminRequired
 from variables import WELCOME_VIDEO_ID
 from langs.i18n import get, get_btn, DEFAULT_LANG
@@ -35,10 +35,7 @@ async def save_group(bot, message):
         if not await db.get_chat(message.chat.id):
             total = await bot.get_chat_members_count(message.chat.id)
             r_j = message.from_user.mention if message.from_user else "Anonymous"
-            await bot.send_message(
-                LOG_CHANNEL,
-                script.LOG_TEXT_G.format(message.chat.title, message.chat.id, total, r_j)
-            )
+            await bot.send_message( LOG_CHANNEL, get(lang, "LOG_TEXT_G", title=message.chat.title, chat_id=message.chat.id, members=total, added_by=r_j ))
             await db.add_chat(message.chat.id, message.chat.title)
         if message.chat.id in temp.BANNED_CHATS:
             if DEBUG_MODE:
@@ -211,8 +208,7 @@ async def get_ststs(bot, message):
             "[STATS] files=%s users=%s chats=%s used=%s free=%s",
             files, total_users, totl_chats, size, free
         )
-    await rju.edit(script.STATUS_TXT.format(files, total_users, totl_chats, size, free))
-
+    await rju.edit( get( lang, "STATUS_TXT", files=files, users=total_users, chats=totl_chats, used=size, free=free ))
 
 # a function for trespassing into others groups, Inspired by a Vazha
 # Not to be used , But Just to showcase his vazhatharam.
