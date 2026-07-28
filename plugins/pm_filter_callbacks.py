@@ -478,7 +478,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
                 await query.answer(get(lang, "FILE_SENT_TO_PM"), show_alert=True)
 
-                k = await msg.reply(script.DELETEMSG, quote=True, protect_content=True)
+                k = await msg.reply(get(lang, "DELETEMSG"), quote=True,  protect_content=True, disable_web_page_preview=True)
+                #k = await msg.reply(get(lang, "DELETEMSG"), quote=True, protect_content=True)
                 await asyncio.sleep(DLTTM)
                 await k.edit_text("<b>Your File/Video is successfully deleted!!!</b>")
                 await msg.delete()
