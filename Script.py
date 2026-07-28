@@ -19,6 +19,6 @@ class script:
     STATUS_TXT       = EN.STATUS_TXT
     LOG_TEXT_G       = EN.LOG_TEXT_G
     LOG_TEXT_P       = EN.LOG_TEXT_P
-    DELETEMSG        = EN.DELETEMSG
-    MELCOW_ENG       = EN.MELCOW_ENG
+   # DELETEMSG        = EN.DELETEMSG
+   # MELCOW_ENG       = EN.MELCOW_ENG
     CAPTION          = EN.CAPTION
