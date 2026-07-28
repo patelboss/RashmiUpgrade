@@ -51,7 +51,7 @@ async def _user_lang(user) -> str:
     return await db.get_user_lang(user.id)
 
 
-@Client.on_message(filters.group & filters.text & filters.incoming)
+@Client.on_message(filters.group & filters.text & filters.incoming & ~filters.command)
 async def give_filter(client, message):
     chat_id = message.chat.id
     user = message.from_user  # Get the user object
