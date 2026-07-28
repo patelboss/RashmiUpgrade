@@ -588,8 +588,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
         
         
         await query.message.edit_text(
-            text=script.START_TXT.format(name=query.from_user.mention, uname=temp.U_NAME, bname=temp.B_NAME),
-            #text=text_content,
+            #text=script.START_TXT.format(name=query.from_user.mention, uname=temp.U_NAME, bname=temp.B_NAME),
+            text=get( lang, "START", name=query.from_user.mention, uname=temp.U_NAME, bname=temp.B_NAME),
             reply_markup=reply_markup,
             parse_mode=enums.ParseMode.HTML
         )
