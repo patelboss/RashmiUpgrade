@@ -339,6 +339,27 @@ class EN:
     BTN_ABOUT          = "♥️ About ♥️"                # Start msg & callbacks
     BTN_ADD_TO_GROUP   = "➕↖️ 𝗔𝗱𝗱 𝗠𝗲 𝗧𝗼 𝗬𝗼𝘂𝗿 𝗚𝗿𝗼𝘂𝗽𝘀↗️➕"  # Start msg after subscribe
 
+    # Button labels used only inside pm_filter_callbacks.py (exact styling preserved)
+    BTN_DONATE_RECEIPT_STYLE = "ꜱᴇɴᴅ ᴘᴀʏᴍᴇɴᴛ ʀᴇᴄᴇɪᴘᴛ 🧾"       # donation_callback
+    BTN_CLOSE_DELETE_STYLE   = "⚠️ ᴄʟᴏsᴇ / ᴅᴇʟᴇᴛᴇ ⚠️"           # donation_callback
+    BTN_SEND_ALL             = "𝐒𝐞𝐧𝐝 𝐀𝐥𝐥"                       # next_page — send-all-files button
+    RESULTS_OF_HEADER        = "Results Of👉🏻 {search} 👈🏻"      # next_page — search results header button
+    BTN_BACK_STYLIZED        = "⬅𝐁𝐀𝐂𝐊"                          # next_page & several cb_handler menus
+    PAGES_LABEL              = "📃 Pages {page} / {total_pages}"  # next_page — page counter (at start)
+    PAGE_LABEL_ALT           = "🗓 {page} / {total_pages}"        # next_page — page counter (mid/end)
+    BTN_NEXT_STYLIZED        = "𝐍𝐄𝐗𝐓➡"                          # next_page — next-page button
+    BTN_CONNECT_ACTION       = "CONNECT"                          # groupcb — connect action label
+    BTN_DISCONNECT_ACTION    = "DISCONNECT"                       # groupcb — disconnect action label
+    BTN_DELETE_CONN          = "DELETE"                           # groupcb — delete connection
+    BTN_BACK_PLAIN           = "BACK"                             # groupcb — back to connections list
+    BTN_HOME                 = "🏠 𝗛𝗼𝗺𝗲"                         # help menu — jumps back to /start
+    BTN_CLOSE_LOCK_STYLE     = "🔐 𝗖𝗹𝗼𝘀𝗲"                        # help menu — close/delete
+    BTN_ADD_TO_GROUP_STYLE   = "➕↖️ 𝗔𝗱𝗱 𝗠𝗲 𝗧𝗼 𝗬𝗼𝘂𝗿 𝗚𝗿𝗼𝘂𝗽𝘀↗️➕"  # start callback
+    BTN_SEARCH_STYLE         = "🧞‍♀️ 𝗦𝗲𝗮𝗿𝗰𝗵 🧐"                  # start callback
+    BTN_GROUP_STYLE          = "✪𝙂𝙍𝙊𝙐𝙋✪"                         # start callback
+    BTN_HELP_STYLE           = "🙆🏻 𝗛𝗲𝗹𝗽 🦾"                     # start callback
+    BTN_ABOUT_STYLE          = "♥️ 𝗔𝗯𝗼𝘂𝘁 ♥️"                     # start callback
+
     # Navigation / general UI
     BTN_BACK           = "◀️ Back"                    # Help menu — back to category list
     BTN_MAIN_MENU      = "🏠 Main Menu"               # Help menu — back to top
@@ -455,14 +476,12 @@ class EN:
     SETTINGS_UPDATED = "✅ Updated"  # setgs — toggle confirmation popup (only the button state changes, no new message text)
     NOT_CONNECTED_BILINGUAL = (
         "I'm not connected to any groups!\n"
-        "मैं आपके किसी भी ग्रुप से कनेक्ट या जुड़ी नही हूं।\n"
         "Check /connections or connect to any groups"
     )
     OWNER_REQUIRED_BILINGUAL = (
         "You need to be Group Owner or an Auth User to do that!\n"
-        "ऐसा करने के लिए आपको समूह का owner या admin होना चाहिए!"
-    )
-    NOT_FOR_YOU_STYLIZED = "𝐓𝐡𝐚𝐭'𝐬 𝐧𝐨𝐭 𝐟𝐨𝐫 𝐲𝐨𝐮 𝐬𝐨𝐧𝐚!\n यह तुम्हारे लिए नहीं है!"  # delallcancel guard
+        )
+    NOT_FOR_YOU_STYLIZED = "𝐓𝐡𝐚𝐭'𝐬 𝐧𝐨𝐭 𝐟𝐨𝐫 𝐲𝐨𝐮 𝐬𝐨𝐧𝐚!"  # delallcancel guard
     GROUP_INFO_MARKDOWN = "Group Name : **{title}**\nGroup ID : `{group_id}`"  # groupcb
     CONNECTED_MARKDOWN = "Connected to **{title}**"  # connectcb
     DISCONNECTED_MARKDOWN = "Disconnected from **{title}**"  # disconnect callback
@@ -480,27 +499,6 @@ class EN:
     JOIN_FIRST_STYLIZED = "𝐈𝐬𝐤𝐨 𝐉𝐨𝐢𝐧 𝐊𝐚𝐫 𝐏𝐡𝐥𝐞 ✋🏻"  # checksub — force-sub gate
     ACTIVE_CONN_CHANGED = "Your Active Connection Has Been Changed. Go To /settings."  # setgs — stale connection guard
 
-    # Button labels used only inside pm_filter_callbacks.py (exact styling preserved)
-    BTN_DONATE_RECEIPT_STYLE = "ꜱᴇɴᴅ ᴘᴀʏᴍᴇɴᴛ ʀᴇᴄᴇɪᴘᴛ 🧾"       # donation_callback
-    BTN_CLOSE_DELETE_STYLE   = "⚠️ ᴄʟᴏsᴇ / ᴅᴇʟᴇᴛᴇ ⚠️"           # donation_callback
-    BTN_SEND_ALL             = "𝐒𝐞𝐧𝐝 𝐀𝐥𝐥"                       # next_page — send-all-files button
-    RESULTS_OF_HEADER        = "Results Of👉🏻 {search} 👈🏻"      # next_page — search results header button
-    BTN_BACK_STYLIZED        = "⬅𝐁𝐀𝐂𝐊"                          # next_page & several cb_handler menus
-    PAGES_LABEL              = "📃 Pages {page} / {total_pages}"  # next_page — page counter (at start)
-    PAGE_LABEL_ALT           = "🗓 {page} / {total_pages}"        # next_page — page counter (mid/end)
-    BTN_NEXT_STYLIZED        = "𝐍𝐄𝐗𝐓➡"                          # next_page — next-page button
-    BTN_CONNECT_ACTION       = "CONNECT"                          # groupcb — connect action label
-    BTN_DISCONNECT_ACTION    = "DISCONNECT"                       # groupcb — disconnect action label
-    BTN_DELETE_CONN          = "DELETE"                           # groupcb — delete connection
-    BTN_BACK_PLAIN           = "BACK"                             # groupcb — back to connections list
-    BTN_HOME                 = "🏠 𝗛𝗼𝗺𝗲"                         # help menu — jumps back to /start
-    BTN_CLOSE_LOCK_STYLE     = "🔐 𝗖𝗹𝗼𝘀𝗲"                        # help menu — close/delete
-    BTN_ADD_TO_GROUP_STYLE   = "➕↖️ 𝗔𝗱𝗱 𝗠𝗲 𝗧𝗼 𝗬𝗼𝘂𝗿 𝗚𝗿𝗼𝘂𝗽𝘀↗️➕"  # start callback
-    BTN_SEARCH_STYLE         = "🧞‍♀️ 𝗦𝗲𝗮𝗿𝗰𝗵 🧐"                  # start callback
-    BTN_GROUP_STYLE          = "✪𝙂𝙍𝙊𝙐𝙋✪"                         # start callback
-    BTN_HELP_STYLE           = "🙆🏻 𝗛𝗲𝗹𝗽 🦾"                     # start callback
-    BTN_ABOUT_STYLE          = "♥️ 𝗔𝗯𝗼𝘂𝘁 ♥️"                     # start callback
-
     # ── plugins/p_ttishow.py — group events & admin moderation commands ──────
     CHAT_NOT_ALLOWED = (
         "<b>CHAT NOT ALLOWED 🐞\n\nMy admins have restricted me from working here! "
@@ -511,53 +509,46 @@ class EN:
         "If you have any questions or doubts about using me, contact support.</b>"
     )
     GIVE_CHAT_ID = "𝐆𝐢𝐯𝐞 𝐌𝐞 𝐀 𝐂𝐡𝐚𝐭 𝐈𝐃"  # /leave, /disable — missing chat id argument
-    GIVE_CHAT_ID_HI = "𝗚𝗶𝘃𝗲 𝗠𝗲 𝗔 𝗖𝗵𝗮𝘁 𝗜𝗗 मुझे Chat ID दीजिए"  # /enable — bilingual variant
+    GIVE_CHAT_ID_HI = "𝗚𝗶𝘃𝗲 𝗠𝗲 𝗔 𝗖𝗵𝗮𝘁 𝗜𝗗"  # /enable — bilingual variant
     LEAVE_NOTICE_BILINGUAL = (
         "<b>𝐇𝐞𝐥𝐥𝐨 𝐅𝐫𝐢𝐞𝐧𝐝𝐬, \n𝐌𝐲 𝐀𝐝𝐦𝐢𝐧 𝐇𝐚𝐬 𝐓𝐨𝐥𝐝 𝐌𝐞 𝐓𝐨 𝐋𝐞𝐚𝐯𝐞 𝐅𝐫𝐨𝐦 𝐆𝐫𝐨𝐮𝐩 , "
-        "𝐈𝐟 𝐘𝐨𝐮 𝐖𝐚𝐧𝐧𝐚 𝐀𝐝𝐝 𝐌𝐞 𝐀𝐠𝐚𝐢𝐧 𝐂𝐨𝐧𝐭𝐚𝐜𝐭 𝐌𝐲 𝗦𝘂𝗽𝗽𝗼𝗿𝘁 𝐆𝐫𝐨𝐮𝐩."
-        "मेरे एडमिन ने मुझे यहाँ काम करने से रोक दिया है! खतम टाटा बाई बाय! "
-        "यदि आप इसके बारे में अधिक जानना चाहते हैं तो 𝗦𝘂𝗽𝗽𝗼𝗿𝘁 पर संपर्क करें</b> "
+        "𝐈𝐟 𝐘𝐨𝐮 𝐖𝐚𝐧𝐧𝐚 𝐀𝐝𝐝 𝐌𝐞 𝐀𝐠𝐚𝐢𝐧 𝐂𝐨𝐧𝐭𝐚𝐜𝐭 𝐌𝐲 𝗦𝘂𝗽𝗽𝗼𝗿𝘁 𝐆𝐫𝐨𝐮𝐩.</b> "
     )
     LEAVE_NOTICE_WITH_REASON = (
         "<b>𝐇𝐞𝐥𝐥𝐨 𝐅𝐫𝐢𝐞𝐧𝐝𝐬, \n𝐌𝐲 𝐀𝐝𝐦𝐢𝐧 𝐇𝐚𝐬 𝐓𝐨𝐥𝐝 𝐌𝐞 𝐓𝐨 𝐋𝐞𝐚𝐯𝐞 𝐅𝐫𝐨𝐦 𝐆𝐫𝐨𝐮𝐩 , "
-        "𝐈𝐟 𝐘𝐨𝐮 𝐖𝐚𝐧𝐧𝐚 𝐀𝐝𝐝 𝐌𝐞 𝐀𝐠𝐚𝐢𝐧 𝐂𝐨𝐧𝐭𝐚𝐜𝐭 𝐌𝐲 𝗦𝘂𝗽𝗽𝗼𝗿𝘁 𝐆𝐫𝐨𝐮𝐩."
-        "मेरे एडमिन ने मुझे यहाँ काम करने से रोक दिया है! खतम टाटा बाई बाय! "
-        "यदि आप इसके बारे में अधिक जानना चाहते हैं तो 𝗦𝘂𝗽𝗽𝗼𝗿𝘁 पर संपर्क करें</b> \n"
+        "𝐈𝐟 𝐘𝐨𝐮 𝐖𝐚𝐧𝐧𝐚 𝐀𝐝𝐝 𝐌𝐞 𝐀𝐠𝐚𝐢𝐧 𝐂𝐨𝐧𝐭𝐚𝐜𝐭 𝐌𝐲 𝗦𝘂𝗽𝗽𝗼𝗿𝘁 𝐆𝐫𝐨𝐮𝐩.</b>"
         "𝐑𝐞𝐚𝐬𝐨𝐧 : <code>{reason}</code>"
     )
     LEFT_CHAT_CONFIRM = "left the chat `{chat}`"
     GENERIC_ERROR = "Error - {error}"
     NO_REASON_PROVIDED = "𝐍𝐨 𝐑𝐞𝐚𝐬𝐨𝐧 𝐏𝐫𝐨𝐯𝐢𝐝𝐞𝐝"
     GIVE_VALID_CHAT_ID = "𝐆𝐢𝐯𝐞 𝐌𝐞 𝐀 𝐕𝐚𝐥𝐢𝐝 𝐂𝐡𝐚𝐭 𝐈𝐃"
-    GIVE_VALID_CHAT_ID_HI = "𝗚𝗶𝘃𝗲 𝗠𝗲 𝗔 𝗩𝗮𝗹𝗶𝗱 𝗖𝗵𝗮𝘁 𝗜𝗗 कृपया मुझे सही chat id दे"
+    GIVE_VALID_CHAT_ID_HI = "𝗚𝗶𝘃𝗲 𝗠𝗲 𝗔 𝗩𝗮𝗹𝗶𝗱 𝗖𝗵𝗮𝘁 𝗜𝗗"
     CHAT_NOT_FOUND_DB = "𝐂𝐡𝐚𝐭 𝐍𝐨𝐭 𝐅𝐨𝐮𝐧𝐝 𝐈𝐧 𝐃𝐁"
     CHAT_ALREADY_DISABLED = "𝗧𝗵𝗶𝘀 𝗰𝗵𝗮𝘁 𝗶𝘀 𝗮𝗹𝗿𝗲𝗮𝗱𝘆 𝗱𝗶𝘀𝗮𝗯𝗹𝗲𝗱:\nReason-<code> {reason} </code>"
     CHAT_DISABLED_OK = "𝗖𝗵𝗮𝘁 𝗦𝘂𝗰𝗰𝗲𝘀𝘀𝗳𝘂𝗹𝗹𝘆 𝗗𝗶𝘀𝗮𝗯𝗹𝗲𝗱"
-    CHAT_NOT_FOUND_DB_HI = "𝗖𝗵𝗮𝘁 𝗡𝗼𝘁 𝗙𝗼𝘂𝗻𝗱 𝗜𝗻 𝗗𝗕 यह 𝗰𝗵𝗮𝘁 हमारे दस्तावेजों में नहीं है !"
-    CHAT_NOT_DISABLED_YET = "𝗧𝗵𝗶𝘀 𝗰𝗵𝗮𝘁 𝗶𝘀 𝗻𝗼𝘁 𝘆𝗲𝘁 𝗱𝗶𝘀𝗮𝗯𝗹𝗲𝗱. यह 𝗰𝗵𝗮𝘁 अभी बंद नहीं किया गया"
+    CHAT_NOT_FOUND_DB_HI = "𝗖𝗵𝗮𝘁 𝗡𝗼𝘁 𝗙𝗼𝘂𝗻𝗱 𝗜𝗻 𝗗𝗕 !"
+    CHAT_NOT_DISABLED_YET = "𝗧𝗵𝗶𝘀 𝗰𝗵𝗮𝘁 𝗶𝘀 𝗻𝗼𝘁 𝘆𝗲𝘁 𝗱𝗶𝘀𝗮𝗯𝗹𝗲𝗱."
     CHAT_RE_ENABLED_OK = "Chat Successfully re-enabled"
     FETCHING_STATS = "Fetching stats.."
-    GIVE_VALID_CHAT_ID_PLAIN = "𝐆𝐢𝐯𝐞 𝐌𝐞 𝐀 𝐕𝐚𝐥𝐢𝐝 𝐂𝐡𝐚𝐭 𝐈𝐃 \nमुझे सही chat id दे"
-    GIVE_VALID_CHAT_ID_PLAIN2 = "Give Me A Valid Chat ID  कृपया मुझे सही chat id दे !"
+    GIVE_VALID_CHAT_ID_PLAIN = "𝐆𝐢𝐯𝐞 𝐌𝐞 𝐀 𝐕𝐚𝐥𝐢𝐝 𝐂𝐡𝐚𝐭 𝐈𝐃!"
+    GIVE_VALID_CHAT_ID_PLAIN2 = "Give Me A Valid Chat ID!"
     INVITE_FAILED = (
         "𝐈𝐧𝐯𝐢𝐭𝐞 𝐋𝐢𝐧𝐤 𝐆𝐞𝐧𝐞𝐫𝐚𝐭𝐢𝐨𝐧 𝐅𝐚𝐢𝐥𝐞𝐝, 𝐈 𝐚𝐦 𝐍𝐨𝐭 𝐇𝐚𝐯𝐢𝐧𝐠 𝐒𝐮𝐟𝐟𝐢𝐜𝐢𝐞𝐧𝐭 𝐑𝐢𝐠𝐡𝐭𝐬. "
-        "आमंत्रण लिंक बनाने में असमर्थ, शायद मुझे पर्याप्त अधिकार प्राप्त नहीं है"
     )
     INVITE_LINK_RESULT = "𝐇𝐞𝐫𝐞 𝐈𝐬 𝐘𝐨𝐮𝐫 𝐈𝐧𝐯𝐢𝐭𝐞 𝐋𝐢𝐧𝐤 {link}"
     GIVE_USER_ID = "𝐆𝐢𝐯𝐞 𝐌𝐞 𝐀 𝐔𝐬𝐞𝐫 𝐈𝐝 / 𝐔𝐬𝐞𝐫𝐧𝐚𝐦𝐞\nमुझे यूजर id या यूजरनेम दीजिए"
     GIVE_USER_ID_PLAIN = "𝐆𝐢𝐯𝐞 𝐌𝐞 𝐀 𝐔𝐬𝐞𝐫 𝐈𝐝 / 𝐔𝐬𝐞𝐫𝐧𝐚𝐦𝐞"
     INVALID_USER_NOT_MET = (
         "𝐓𝐡𝐢𝐬 𝐈𝐬 𝐀𝐧 𝐈𝐧𝐯𝐚𝐥𝐢𝐝 𝐔𝐬𝐞𝐫, 𝐌𝐚𝐤𝐞 𝐒𝐮𝐫𝐞 𝐈 𝐇𝐚𝐯𝐞 𝐌𝐞𝐭 𝐇𝐢𝐦 𝐁𝐞𝐟𝐨𝐫𝐞. "
-        "यह id गलत है क्योंकि यह उनमें से नही है जिनसे मेने संपर्क किया है।"
     )
     INVALID_USER_MIGHT_BE_CHANNEL = (
         "𝐓𝐡𝐢𝐬 𝐦𝐢𝐠𝐡𝐭 𝐛𝐞 𝐚 𝐜𝐡𝐚𝐧𝐧𝐞𝐥, 𝐦𝐚𝐤𝐞 𝐬𝐮𝐫𝐞 𝐢𝐭𝐬 𝐚 𝐮𝐬𝐞𝐫. "
-        "आप पहले प्रमाणित करे की यह एक यूजर है। मुझे लगता है की यह किसी चैनल की id है"
     )
-    USER_ALREADY_BANNED = "{mention} 𝐈𝐬 𝐀𝐥𝐫𝐞𝐚𝐝𝐲 𝐁𝐚𝐧𝐧𝐞𝐝 पहले से ही प्रतिबंधित है\n𝐑𝐞𝐚𝐬𝐨𝐧 (कारण): {reason}"
-    USER_BANNED_OK = "𝐒𝐮𝐜𝐜𝐞𝐬𝐬𝐟𝐮𝐥𝐥𝐲 𝐁𝐚𝐧𝐧𝐞𝐝 ! सुधर जाओ तो फिर आ जाना {mention}"
-    USER_NOT_BANNED_YET = "{mention} 𝐢𝐬 𝐧𝐨𝐭 𝐲𝐞𝐭 𝐛𝐚𝐧𝐧𝐞𝐝. अभी बैन नही हुआ"
-    USER_UNBANNED_OK = "𝐒𝐮𝐜𝐜𝐞𝐬𝐬𝐟𝐮𝐥𝐥𝐲 𝐔𝐧𝐛𝐚𝐧𝐧𝐞𝐝 ! सुबह का भूला अगर शाम को घर आ जाए तो उसे भुला नहीं कहते। {mention}"
+    USER_ALREADY_BANNED = "{mention} 𝐈𝐬 𝐀𝐥𝐫𝐞𝐚𝐝𝐲 𝐁𝐚𝐧𝐧𝐞𝐝 \n𝐑𝐞𝐚𝐬𝐨𝐧 : {reason}"
+    USER_BANNED_OK = "{mention} 𝐁𝐚𝐧𝐧𝐞𝐝 𝐒𝐮𝐜𝐜𝐞𝐬𝐬𝐟𝐮𝐥𝐥𝐲!"
+    USER_NOT_BANNED_YET = "{mention} 𝐢𝐬 𝐧𝐨𝐭 𝐲𝐞𝐭 𝐛𝐚𝐧𝐧𝐞𝐝."
+    USER_UNBANNED_OK = "{mention} 𝐔𝐧𝐛𝐚𝐧𝐧𝐞𝐝 𝐒𝐮𝐜𝐜𝐞𝐬𝐬𝐟𝐮𝐥𝐥𝐲"
     FETCHING_USERS_LIST = "Getting List Of Users"
     USERS_LIST_CAPTION = "List Of Users"
     FETCHING_CHATS_LIST = "Getting List Of Chats"
@@ -733,8 +724,7 @@ class EN:
     BANNED_USER_REPLY = "Sorry Dude, You are Banned to use Me... आप प्रतिबंधित है।\nBan Reason (कारण): {ban_reason}"  # ban_reply — banned user tries to use bot in PM
     GRP_DISABLED_NOTICE_BILINGUAL = (
         "CHAT NOT ALLOWED 🐞\n\n"
-        "My admins has restricted me from working here ! If you want to know more about it contact support.\n"
-        "मेरे एडमिन ने मुझे यहाँ काम करने से प्रतिबंधित कर दिया है! यदि आप इसके बारे में अधिक जानना चाहते हैं तो Support पर संपर्क करें.\n"
+        "My admins has restricted me from working here ! If you want to know more about it contact support."
         "Reason : <code>{reason}</code>."
     )  # grp_bd — bot leaves a disabled group (distinct from CHAT_NOT_ALLOWED: bilingual + reason, not <b>-wrapped)
 
