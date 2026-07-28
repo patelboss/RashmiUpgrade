@@ -82,7 +82,9 @@ async def save_group(bot, message):
                 # Replace MELCOW_VID with the file ID stored in settings
                 temp.MELCOW['welcome'] = await message.reply_video(
                     video=WELCOME_VIDEO_ID,  # Use file ID here
-                    caption=(script.MELCOW_ENG.format(u.mention, message.chat.title)),
+                    caption=get(lang, "MELCOW_ENG", uname=u.mention, group=message.chat.title),
+                 
+                    #caption=(script.MELCOW_ENG.format(u.mention, message.chat.title)),
                     reply_markup=InlineKeyboardMarkup(
                         [[
                             InlineKeyboardButton(get_btn(lang, "BTN_SUPPORT_GROUP"), url=GRP_LNK),
