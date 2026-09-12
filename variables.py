@@ -60,9 +60,9 @@ WELCOME_VIDEO_ID = _cfg(
 )
 
 # ── Captions ───────────────────────────────────────────────────────────────────
-CUSTOM_FILE_CAPTION = _cfg("CUSTOM_FILE_CAPTION") or str(script.CAPTION)
+CUSTOM_FILE_CAPTION = str(script.CAPTION)
 
 logger.debug(
     "variables loaded – VERIFY=%s, AUTH_CHANNELS=%s, DLTTM=%d",
-    VERIFY, AUTH_CHANNELS, DLTTM,
+    VERIFY, AUTH_CHANNELS, DLTTM, CUSTOM_FILE_CAPTION,
 )
