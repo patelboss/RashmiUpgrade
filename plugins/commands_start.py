@@ -305,7 +305,7 @@ async def _handle_batch(client, message, m, data, lang):
     cleanup = await client.send_message(
         message.from_user.id,
         get(lang, "DELETEMSG", minutes=minutes),
-        protect_content=True
+        protect_content=True, disable_web_page_preview=True
     )
     await asyncio.sleep(DLTTM)
     for msg in files_sent:
@@ -395,7 +395,7 @@ async def _handle_all_files(client, message, m, data, file_id, pre, lang):
     k = await client.send_message(
         message.from_user.id,
         get(lang, "DELETEMSG", minutes=minutes),
-        protect_content=True
+        protect_content=True, disable_web_page_preview=True
     )
     await asyncio.sleep(DLTTM)
     for x in filesarr:
