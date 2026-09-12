@@ -494,7 +494,7 @@ async def _handle_single_file(client, message, m, data, file_id, pre, lang):
             await msg.edit_caption(f_cap)
             minutes = int(DLTTM // 60) if DLTTM >= 60 else 1
             k = await msg.reply(get(lang, "DELETEMSG", minutes=minutes),
-                                quote=True, protect_content=True)
+                                quote=True, protect_content=True, disable_web_page_preview=True)
             await asyncio.sleep(DLTTM)
             await msg.delete()
             await k.edit_text(get(lang, "FILE_DELETED_OK"))
@@ -527,7 +527,7 @@ async def _handle_single_file(client, message, m, data, file_id, pre, lang):
     )
     minutes = int(DLTTM // 60) if DLTTM >= 60 else 1
     k = await msg.reply(get(lang, "DELETEMSG", minutes=minutes),
-                        quote=True, protect_content=True)
+                        quote=True, protect_content=True, disable_web_page_preview=True)
     dlog("SINGLE_FILE_SENT", user_id=message.from_user.id,
          extra={"file": files.file_name})
     await asyncio.sleep(DLTTM)
