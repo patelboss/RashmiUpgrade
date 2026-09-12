@@ -1,4 +1,4 @@
-class script:
+class script(object):
     CAPTION = """
 <pre>✨ 𝗡𝗮𝗺𝗲</pre>
 🎥 <b>@Filmykeedha</b> <a href='https://t.me/Filmykeedha/306'><b>{file_name}</b></a>
